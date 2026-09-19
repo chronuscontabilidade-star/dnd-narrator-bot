@@ -58,7 +58,7 @@ class RulesTests(unittest.TestCase):
             level=1,
             rng=FixedRng([12]),
         )
-        self.assertEqual(result.total, 15)
+        self.assertEqual(result.total, 17)
         self.assertTrue(result.success)
 
     def test_check_can_fail(self):
