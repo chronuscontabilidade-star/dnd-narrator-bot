@@ -297,31 +297,91 @@ class Narrator:
             log.warning("IA indisponível para criar personagem; usando fallback offline: %s", exc)
         return self._offline_personagem(nome, classe, raca, detalhes)
 
+    @staticmethod
+    def _normalizar_acao(texto: str) -> str:
+        import unicodedata
+        valor = (texto or "").lower()
+        return "".join(
+            ch for ch in unicodedata.normalize("NFD", valor)
+            if unicodedata.category(ch) != "Mn"
+        )
+
+    @classmethod
+    def _classificar_acao_obvia(cls, acao: str):
+        """Retorna False para ações narrativas simples, True para ações que exigem teste,
+        ou None quando a ação é ambígua e a IA pode decidir.
+        """
+        texto = cls._normalizar_acao(acao)
+
+        # Ações rotineiras: não gastam teste só para movimentar a narrativa.
+        simples = (
+            "andar", "caminhar", "caminho", "ir ate", "vou ate", "aproximar",
+            "aproximar-se", "entrar", "sair", "seguir", "olhar", "observar",
+            "ver", "falar", "dizer", "perguntar", "responder", "sentar",
+            "levantar", "esperar", "continuar", "parar", "voltar",
+        )
+        if any(item in texto for item in simples):
+            return False
+
+        # Ações explicitamente arriscadas ou dependentes de perícia.
+        arriscadas = (
+            "bater", "atacar", "golpear", "lutar", "roubar", "furtar",
+            "inspecionar", "inspeciono", "analisar", "analisar", "investigar",
+            "procurar", "buscar pistas", "tentar ouvir", "ouvir atentamente",
+            "escutar", "perceber", "rastrear", "seguir pegadas", "esconder",
+            "esconder-se", "furtividade", "arrombar", "abrir fechadura",
+            "desarmar", "enganar", "persuadir", "intimidar", "convencer",
+            "blefar", "escalar", "nadar", "saltar", "desarmar armadilha",
+        )
+        if any(item in texto for item in arriscadas):
+            return True
+
+        return None
+
     async def avaliar_acao(self, sessao: dict, acao: str) -> dict:
+        classificacao = self._classificar_acao_obvia(acao)
+        from dice import detectar_atributo as _det
+        atributo_detectado = _det(acao) or "Destreza"
+
+        if classificacao is False:
+            return {
+                "precisa_teste": False,
+                "atributo": atributo_detectado,
+                "cd": 10,
+                "motivo": "Ação narrativa simples; nenhum teste é necessário.",
+            }
+
+        if classificacao is True:
+            return {
+                "precisa_teste": True,
+                "atributo": atributo_detectado,
+                "cd": 12,
+                "motivo": "Ação envolve risco, perícia ou habilidade.",
+            }
+
         prompt = (
-            "Avalie se esta ação exige teste de atributo e em qual atributo. "
+            "Avalie esta ação segundo D&D 5e. Só peça teste quando houver uma consequência "
+            "relevante e o resultado for incerto. Ações rotineiras como andar, entrar, olhar, "
+            "observar, falar, perguntar ou seguir por um caminho livre NÃO exigem rolagem. "
+            "Ações como atacar, roubar, investigar, procurar pistas, analisar algo difícil, "
+            "tentar ouvir algo oculto, persuadir, intimidar, furtividade ou superar um obstáculo "
+            "podem exigir teste. Nunca peça rolagem apenas para preencher a narrativa. "
             "Retorne JSON: {'precisa_teste': true/false, 'atributo': 'Força', 'cd': 12, 'motivo': '...'} "
             f"Contexto: {sessao.get('contexto', '')}. Ação: {acao}"
         )
         try:
             data = await self._request_json(prompt)
-            if isinstance(data, dict):
-                if "precisa_teste" in data:
-                    return self._validar_avaliacao(data)
+            if isinstance(data, dict) and "precisa_teste" in data:
+                return self._validar_avaliacao(data)
         except Exception as exc:
-            log.warning("IA indisponível ao avaliar ação; usando fallback offline: %s", exc)
+            log.warning("IA indisponível ao avaliar ação; usando regra local: %s", exc)
 
-        texto = (acao or "").lower()
-        simples = [
-            "caminho", "andar", "avanço", "aproximar", "aproximar-se", "se aproximar",
-            "entrar", "andar lentamente", "caminho até a entrada", "balcão"
-        ]
-        if any(item in texto for item in simples):
-            return {"precisa_teste": False, "atributo": "Destreza", "cd": 10, "motivo": "Ação simples"}
-        # Fallback inteligente: tenta detectar atributo pelo texto
-        from dice import detectar_atributo as _det
-        atributo_detectado = _det(acao) or "Destreza"
-        return {"precisa_teste": True, "atributo": atributo_detectado, "cd": 12, "motivo": "Ação arriscada (fallback offline)"}
+        return {
+            "precisa_teste": False,
+            "atributo": atributo_detectado,
+            "cd": 10,
+            "motivo": "IA indisponível e ação ambígua; seguindo sem bloquear o jogador.",
+        }
 
     async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None, historico: list | None = None) -> dict:
         prompt = (
