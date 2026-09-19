@@ -415,7 +415,9 @@ class Narrator:
         prompt = (
             "Narre a ação de um personagem em D&D em português do Brasil. "
             "Retorne JSON com chaves 'narrativa', 'novo_contexto' e 'sugestoes'. "
-            f"Contexto atual: {sessao.get('contexto', '')}. Personagem ativo: {personagem.get('nome')} "
+            f"Contexto atual: {sessao.get('contexto', '')}. "
+            f"Estado estruturado da aventura: {json.dumps(sessao.get('aventura') or {}, ensure_ascii=False)}. "
+            f"Personagem ativo: {personagem.get('nome')} "
             f"({personagem.get('classe')}, {personagem.get('raca')}). Ação: {acao}. "
             f"Teste: {teste}. Jogadores presentes: {[p.get('nome') for p in (jogadores or [])]}. "
             f"Histórico recente: {(historico or [])[-10:]}. "
