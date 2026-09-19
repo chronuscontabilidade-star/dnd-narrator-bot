@@ -238,7 +238,7 @@ A IA deve gerar:
 
 - [x] Schema inicial de AdventureState.
 - [x] Prompt de geração estruturada.
-- [ ] Validação semântica da aventura.
+- [x] Validação estrutural básica da aventura.\n- [ ] Validação semântica da aventura.
 - [ ] Validação de conexões entre locais.
 - [ ] Validação de referências entre NPCs, quests, itens e locais.
 - [ ] Garantir objetivos alcançáveis por múltiplos caminhos.
@@ -397,7 +397,7 @@ Criar:
 - [ ] Persistência durante a simulação.
 - [ ] Execução sem Telegram.
 - [ ] Logs estruturados.
-- [ ] Relatório final.
+- [x] Relatório final.\n- [x] Validação estrutural durante a simulação.
 
 ### Métricas do simulador
 
