@@ -316,13 +316,14 @@ class Narrator:
         atributo_detectado = _det(acao) or "Destreza"
         return {"precisa_teste": True, "atributo": atributo_detectado, "cd": 12, "motivo": "Ação arriscada (fallback offline)"}
 
-    async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None) -> dict:
+    async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None, historico: list | None = None) -> dict:
         prompt = (
             "Narre a ação de um personagem em D&D em português do Brasil. "
             "Retorne JSON com chaves 'narrativa', 'novo_contexto' e 'sugestoes'. "
-            f"Contexto atual: {sessao.get('contexto', '')}. Personagem: {personagem.get('nome')} "
+            f"Contexto atual: {sessao.get('contexto', '')}. Personagem ativo: {personagem.get('nome')} "
             f"({personagem.get('classe')}, {personagem.get('raca')}). Ação: {acao}. "
-            f"Teste: {teste}."
+            f"Teste: {teste}. Jogadores presentes: {[p.get('nome') for p in (jogadores or [])]}. "
+            f"Histórico recente: {(historico or [])[-10:]}. "
         )
         try:
             data = await self._request_json(prompt)
