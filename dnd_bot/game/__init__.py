@@ -18,6 +18,18 @@ from .combat import (
 )
 from .dice import DiceRoll, roll, roll_d20
 from .engine import GameEngine
+from .simulator import (
+    CampaignSimulator,
+    GoalDrivenPlayerAgent,
+    PartyMember,
+    PartySimulationResult,
+    PersonalityPlayerAgent,
+    PlayerAgent,
+    ScriptedPlayerAgent,
+    SimulationReport,
+    SimulationResult,
+    build_vertical_slice_adventure,
+)
 from .director import SceneDirector, SceneSuggestion
 from .rules import (
     ability_modifier,
@@ -37,7 +49,16 @@ __all__ = [
     "Combatant",
     "DiceRoll",
     "GameEngine",
+    "CampaignSimulator",
     "GoalDrivenPlayerAgent",
+    "PartyMember",
+    "PartySimulationResult",
+    "PersonalityPlayerAgent",
+    "PlayerAgent",
+    "ScriptedPlayerAgent",
+    "SimulationReport",
+    "SimulationResult",
+    "build_vertical_slice_adventure",
     "SceneDirector",
     "SceneSuggestion",
     "InitiativeResult",
