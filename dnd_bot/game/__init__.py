@@ -5,6 +5,7 @@ resolvidas por este pacote.
 """
 
 from .character import Character
+from .combat import AttackResult, CombatState, Combatant, InitiativeResult
 from .dice import DiceRoll, roll, roll_d20
 from .engine import GameEngine
 from .rules import (
@@ -15,9 +16,13 @@ from .rules import (
 )
 
 __all__ = [
+    "AttackResult",
     "Character",
+    "CombatState",
+    "Combatant",
     "DiceRoll",
     "GameEngine",
+    "InitiativeResult",
     "ability_check",
     "ability_modifier",
     "proficiency_bonus",
