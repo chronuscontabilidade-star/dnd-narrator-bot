@@ -331,6 +331,18 @@ O Diretor de Cena **não deve exigir uma solução específica**.
 
 Objetivos importantes devem possuir múltiplas pistas, caminhos ou oportunidades de descoberta.
 
+### Future, consequências cômicas para personagens que abandonam o grupo
+
+- [ ] Se um personagem recusar uma ação coletiva e decidir seguir sozinho, permitir que o narrador produza posteriormente uma consequência narrativa cômica e desproporcional.
+- [ ] Exemplos possíveis: acidente absurdo, encontro improvável, azar banal ou uma morte ridiculamente contextualizada.
+- [ ] A consequência deve ser narrativa, não uma regra automática do GameEngine.
+- [ ] Registrar a recusa no histórico para que o narrador possa utilizá-la em uma cena posterior.
+
+Exemplo de tom:
+
+> Fulano decidiu continuar sua jornada sozinho.  
+> Alguns minutos depois, engasgou com um amendoim e foi de Vasco.
+
 Critério de pronto: jogadores podem ignorar uma pista ou NPC sem destruir a campanha, enquanto o sistema consegue criar novas oportunidades coerentes.
 
 ---
