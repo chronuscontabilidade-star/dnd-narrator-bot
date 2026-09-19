@@ -4,16 +4,29 @@ import unittest
 from pathlib import Path
 
 from dnd_bot.database import Database
+from dnd_bot.game.adventure import AdventureState, SCHEMA_VERSION, adventure_generation_prompt
 from dnd_bot.dice import realizar_teste
 from dnd_bot.narrator import Narrator
 
 
 class NarratorTests(unittest.TestCase):
-    def test_offline_narrator_starts_adventure(self):
+    def test_offline_narrator_starts_structured_adventure(self):
         intro = asyncio.run(Narrator("").iniciar_aventura(123))
-        self.assertTrue(intro["titulo"])
+        state = AdventureState.from_dict(intro)
+        self.assertEqual(state.data["schema_version"], SCHEMA_VERSION)
+        self.assertTrue(state.data["aventura"]["titulo"])
+        self.assertTrue(state.data["locais"])
+        self.assertTrue(state.data["progresso"]["local_atual"])
         self.assertTrue(intro["narrativa"])
         self.assertTrue(intro["contexto"])
+
+    def test_adventure_generation_prompt_defines_stable_contract(self):
+        prompt = adventure_generation_prompt()
+        self.assertIn('"schema_version": 1', prompt)
+        self.assertIn('"locais"', prompt)
+        self.assertIn('"npcs"', prompt)
+        self.assertIn('"quests"', prompt)
+        self.assertIn('"progresso"', prompt)
 
     def test_json_parser_accepts_markdown_fence(self):
         parsed = Narrator("")._parse_json("```json\n{\"ok\": true}\n```")
@@ -75,6 +88,9 @@ class DatabaseTests(unittest.TestCase):
             database.criar_sessao(1, "contexto")
             database.salvar_personagem(2, 1, "Kira", "Ladina", "Elfica", {"Destreza": 16}, "historia", "ladina reservada; coleciona chaves")
             self.assertEqual(database.obter_sessao(1)["contexto"], "contexto")
+            adventure = {"schema_version": 1, "aventura": {"id": "teste"}}
+            self.assertTrue(database.atualizar_aventura(1, adventure))
+            self.assertEqual(database.obter_sessao(1)["aventura"], adventure)
             self.assertEqual(database.obter_personagem(2, 1)["atributos"], {"Destreza": 16})
 
     def test_public_operations_and_new_session_cleanup(self):
