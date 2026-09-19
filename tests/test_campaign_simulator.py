@@ -80,7 +80,7 @@ class CampaignSimulatorTests(unittest.TestCase):
                     class_name="Ladino",
                     abilities={
                         "Força": 10, "Destreza": 16, "Constituição": 12,
-                        "Inteligência": 12, "Sabedoria": 12, "Carisma": 12,
+                        "Inteligência": 12, "Sabedoria": 16, "Carisma": 12,
                     },
                     max_hp=12,
                     hp=12,
