@@ -2,6 +2,7 @@ import unittest
 
 from dnd_bot.game.character import Character
 from dnd_bot.game.party import PartyDecision, PartyDecisionResolver, PartyVote
+from dnd_bot.game.participation import PartyParticipation, PartyParticipationResolver
 from dnd_bot.game.simulator import (
     CampaignSimulator,
     GoalDrivenPlayerAgent,
@@ -184,6 +185,72 @@ class CampaignSimulatorTests(unittest.TestCase):
                     PartyVote("lia", "B"),
                 ),
             )
+
+
+    def test_individual_participation_can_be_declined(self):
+        resolution = PartyParticipationResolver().resolve(
+            "decisao-1",
+            "Investigar a cripta",
+            (
+                PartyParticipation("lia", "Investigar a cripta", True),
+                PartyParticipation("bruno", "Investigar a cripta", False),
+            ),
+        )
+
+        self.assertEqual([p.player_id for p in resolution.participants], ["lia"])
+        self.assertEqual(resolution.declined, ("bruno",))
+        self.assertIn("1 participante", resolution.reason)
+
+    def test_individual_participation_rejects_duplicate_player(self):
+        with self.assertRaises(ValueError):
+            PartyParticipationResolver().resolve(
+                "decisao-1",
+                "Investigar",
+                (
+                    PartyParticipation("lia", "Investigar"),
+                    PartyParticipation("lia", "Investigar"),
+                ),
+            )
+
+    def test_party_report_records_individual_participation_metrics(self):
+        state = build_vertical_slice_adventure()
+        members = [
+            PartyMember(
+                Character(
+                    name="Lia", race="Humano", class_name="Ladino",
+                    abilities={
+                        "Força": 10, "Destreza": 16, "Constituição": 12,
+                        "Inteligência": 12, "Sabedoria": 16, "Carisma": 12,
+                    },
+                    max_hp=12, hp=12, armor_class=14,
+                ),
+                PersonalityPlayerAgent("social"),
+            ),
+            PartyMember(
+                Character(
+                    name="Bruno", race="Humano", class_name="Guerreiro",
+                    abilities={
+                        "Força": 16, "Destreza": 12, "Constituição": 14,
+                        "Inteligência": 10, "Sabedoria": 12, "Carisma": 10,
+                    },
+                    max_hp=20, hp=20, armor_class=15,
+                ),
+                PersonalityPlayerAgent("cauteloso"),
+            ),
+        ]
+
+        result = CampaignSimulator(rng=FixedRng()).run_party(
+            state,
+            members,
+            max_rounds=10,
+        )
+
+        self.assertGreaterEqual(result.report.participation_rounds, 1)
+        self.assertGreaterEqual(result.report.participants, 1)
+        self.assertGreaterEqual(result.report.individual_results, 1)
+        self.assertTrue(
+            any(event.startswith("participacao:Lia:aceita:") for event in result.report.events)
+        )
 
     def test_invalid_initial_campaign_is_reported(self):
         state = build_vertical_slice_adventure().to_dict()
