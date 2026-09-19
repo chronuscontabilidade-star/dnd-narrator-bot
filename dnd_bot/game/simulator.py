@@ -253,7 +253,8 @@ class CampaignSimulator:
             if current is hero:
                 if enemy.is_alive:
                     combat.attack(hero, enemy, rng=self.rng)
-                combat.end_turn(hero)
+                if not combat.finished:
+                    combat.end_turn(hero)
             else:
                 if hero.is_alive:
                     combat.attack(enemy, hero, rng=self.rng)
