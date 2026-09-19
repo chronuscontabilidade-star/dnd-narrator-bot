@@ -77,6 +77,10 @@ class Database:
                     resultado    TEXT    NOT NULL,
                     feita_em     TEXT    NOT NULL
                 );
+
+                CREATE INDEX IF NOT EXISTS idx_personagens_chat ON personagens(chat_id);
+                CREATE INDEX IF NOT EXISTS idx_personagens_user ON personagens(user_id, chat_id);
+                CREATE INDEX IF NOT EXISTS idx_acoes_chat ON acoes(chat_id);
             """
             if self.backend == "postgres":
                 # Keep the deployed schema compatible with SQLite's public
@@ -191,7 +195,7 @@ class Database:
             p = "%s" if self.backend == "postgres" else "?"
             rows = conn.execute(f"""
                 SELECT a.*, p.nome FROM acoes a
-                JOIN personagens p ON a.user_id=p.user_id AND a.chat_id=p.chat_id
+                LEFT JOIN personagens p ON a.user_id=p.user_id AND a.chat_id=p.chat_id
                 WHERE a.chat_id={p}
                 ORDER BY a.id DESC LIMIT {p}
             """, (chat_id, limite)).fetchall()

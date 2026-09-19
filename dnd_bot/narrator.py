@@ -283,7 +283,10 @@ class Narrator:
         ]
         if any(item in texto for item in simples):
             return {"precisa_teste": False, "atributo": "Destreza", "cd": 10, "motivo": "Ação simples"}
-        return {"precisa_teste": True, "atributo": "Destreza", "cd": 12, "motivo": "Ação arriscada"}
+        # Fallback inteligente: tenta detectar atributo pelo texto
+        from dice import detectar_atributo as _det
+        atributo_detectado = _det(acao) or "Destreza"
+        return {"precisa_teste": True, "atributo": atributo_detectado, "cd": 12, "motivo": "Ação arriscada (fallback offline)"}
 
     async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None) -> dict:
         prompt = (
@@ -329,18 +332,20 @@ class Narrator:
         return {"sugestoes": self._offline_sugestoes(sessao, personagem)}
 
     async def gerar_cena(self, sessao: dict) -> dict:
+        """Gera APENAS a descrição textual da cena. Imagem: use gerar_imagem()."""
         prompt = (
-            "Descreva uma cena visual em estilo de RPG em JSON: {'descricao': '...', 'imagem_bytes': null}. "
+            "Descreva a cena visual atual da aventura em 2-3 frases cinematográficas em português do Brasil. "
+            "Retorne JSON: {'descricao': 'descrição vívida da cena'}. "
             f"Contexto: {sessao.get('contexto', '')}"
         )
         try:
             data = await self._request_json(prompt)
             if isinstance(data, dict) and data.get("descricao"):
-                return {"descricao": data["descricao"], "imagem_bytes": data.get("imagem_bytes")}
+                return {"descricao": data["descricao"], "imagem_bytes": None}
         except Exception as exc:
             log.warning("IA indisponível para gerar cena; usando fallback offline: %s", exc)
         ctx = sessao.get("contexto", "")
-        desc = f"Cena atual: a tensão aumenta ao redor dos limites da aventura. O ambiente parece vivo, e a atenção se concentra em cada detalhe relevante. etapa 1 da cena principal. {ctx}"
+        desc = f"A aventura continua. {ctx[:200]}" if ctx else "A cena se desenrola em silêncio tenso."
         return {"descricao": desc, "imagem_bytes": None}
 
     async def gerar_imagem(self, sessao: dict):

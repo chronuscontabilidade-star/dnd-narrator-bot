@@ -178,8 +178,11 @@ def formatar_resultado_dado(teste: dict, nome_personagem: str) -> str:
     )
 
 
-def escapa(texto: str) -> str:
-    """Escapa caracteres especiais do MarkdownV2."""
+def escapa(texto) -> str:
+    """Escapa caracteres especiais do MarkdownV2. Tolerante a None."""
+    if texto is None:
+        return ""
+    texto = str(texto)
     for ch in r"\_*[]()~`>#+-=|{}.!":
         texto = texto.replace(ch, f"\\{ch}")
     return texto
