@@ -16,6 +16,8 @@ except Exception:  # pragma: no cover - SDK optional in offline environments
 
 log = logging.getLogger(__name__)
 
+from .game.adventure import AdventureState, adventure_generation_prompt, empty_adventure_state
+
 SYSTEM_PROMPT = """Você é um Mestre de RPG experiente e criativo especializado em D&D 5e.
 Você narra aventuras imersivas em português do Brasil com descrições vívidas e tensão dramática.
 Sempre mantenha consistência com o contexto da aventura e as ações anteriores.
@@ -234,19 +236,45 @@ class Narrator:
         raise last_error or RuntimeError("Falha ao obter resposta da IA")
 
     async def iniciar_aventura(self, chat_id: int) -> dict:
-        aventura = self._offline_scene_seed(chat_id)
-        prompt = (
-            "Crie uma aventura de D&D 5e em português do Brasil em formato JSON: "
-            "{\"titulo\": \"...\", \"narrativa\": \"...\", \"contexto\": \"...\"}. "
-            "Mantenha a narrativa envolvente, com local, ameaça, objetivo e senso de mistério."
-        )
+        """Gera uma campanha nova seguindo o contrato AdventureState.
+
+        A aventura não é pré-gravada: cada chamada pede uma nova geração à IA.
+        O estado retornado serve apenas como snapshot persistente da campanha
+        atualmente em jogo.
+        """
+        seed = self._offline_scene_seed(chat_id)
+        prompt = adventure_generation_prompt()
         try:
             data = await self._request_json(prompt)
-            if isinstance(data, dict) and data.get("titulo") and data.get("narrativa") and data.get("contexto"):
-                return data
+            state = AdventureState.from_dict(data)
+            payload = state.to_dict()
+            narrativa = payload["narrativa_inicial"]
+            progresso = payload["progresso"]
+            local_id = progresso["local_atual"]
+            local = next(
+                (item for item in payload["locais"] if item.get("id") == local_id),
+                None,
+            )
+            local_nome = local.get("nome", "local desconhecido") if local else "local desconhecido"
+            payload["narrativa"] = narrativa
+            payload["contexto"] = (
+                f"Aventura: {payload['aventura']['titulo']}. "
+                f"Local atual: {local_nome}. "
+                f"Objetivo(s): {', '.join(q.get('titulo', '') for q in payload['quests'] if q.get('status') == 'ativa') or 'explorar a situação'}."
+            )
+            return payload
         except Exception as exc:
-            log.warning("IA indisponível para iniciar aventura; usando fallback offline: %s", exc)
-        return aventura
+            log.warning("IA indisponível para gerar aventura nova; usando gerador mínimo local: %s", exc)
+
+        fallback = empty_adventure_state(
+            titulo=seed["titulo"],
+            resumo=seed["contexto"],
+            local_inicial=seed["titulo"],
+            narrativa_inicial=seed["narrativa"],
+        )
+        fallback["narrativa"] = seed["narrativa"]
+        fallback["contexto"] = seed["contexto"]
+        return fallback
 
     @staticmethod
     def _validar_avaliacao(data: dict) -> dict:
