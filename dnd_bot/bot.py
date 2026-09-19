@@ -263,11 +263,17 @@ async def cmd_iniciar_historia(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_nova_aventura(update, ctx):
     chat_id = update.effective_chat.id
+    if db.obter_sessao(chat_id) and (not ctx.args or ctx.args[0].upper() != "CONFIRMAR"):
+        await update.message.reply_text(
+            "⚠️ Isso encerra a campanha atual e apaga personagens e histórico. "
+            "Se realmente quiser começar outra, use /nova_aventura CONFIRMAR."
+        )
+        return
     intro = await narrator.iniciar_aventura(chat_id)
     db.criar_sessao(chat_id, intro["contexto"], reset=True)
     await update.message.reply_text(
         f"🆕 Nova aventura criada: {intro['titulo']}\n\n"
-        "Os personagens desta campanha foram limpos. Use /start para criar o personagem desta nova partida."
+        "Use /start para criar o personagem desta nova partida."
     )
 
 
@@ -399,6 +405,7 @@ async def cmd_rolar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             cd = int(args[1])
         except ValueError:
             pass
+    cd = max(1, min(cd, 30))
 
     teste = realizar_teste(p["atributos"], atributo, dificuldade=cd)
     await update.message.reply_text(
@@ -443,7 +450,8 @@ async def cmd_sugerir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             linhas.append(f"{i}. {s}")
 
-    await update.message.reply_text(
+    await enviar_texto_seguro(
+        update,
         f"💡 Sugestões para {p['nome']}:\n\n" + "\n\n".join(linhas) +
         "\n\nUse /acao + descrição para agir!"
     )
@@ -467,7 +475,7 @@ async def cmd_cena(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if imagem.get("imagem_bytes"):
         await update.message.reply_photo(
             photo=imagem["imagem_bytes"],
-            caption=f"🏰 {resultado.get('descricao', '')}",
+            caption=f"🏰 {resultado.get('descricao', '')}"[:1000],
         )
     else:
         await enviar_texto_seguro(update, f"🏰 Cena atual:\n\n{resultado.get('descricao', '')}")
@@ -480,8 +488,9 @@ async def cmd_ficha(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not p:
         await update.message.reply_text("❌ Você ainda não tem personagem. Use /start.")
         return
-    await update.message.reply_text(
-        f"📜 *{p['nome']}* — {p['classe']} {p['raca']}\n\n"
+    await enviar_texto_seguro(
+        update,
+        f"📜 {p['nome']} — {p['classe']} {p['raca']}\n\n"
         f"{formatar_atributos(p['atributos'])}\n\n"
         f"📖 {p['historia']}"
     )
@@ -494,7 +503,7 @@ async def cmd_jogadores(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not jogadores:
         await update.message.reply_text("👥 Nenhum jogador ainda.")
         return
-    lista = "\n".join(f"• *{j['nome']}* — {j['classe']} {j['raca']}" for j in jogadores)
+    lista = "\n".join(f"• {j['nome']} — {j['classe']} {j['raca']}" for j in jogadores)
     await enviar_texto_seguro(update, f"👥 Jogadores ({len(jogadores)}):\n\n{lista}")
 
 
