@@ -73,7 +73,7 @@ class DatabaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             database = Database(str(Path(directory) / "test.db"))
             database.criar_sessao(1, "contexto")
-            database.salvar_personagem(2, 1, "Kira", "Ladina", "Elfica", {"Destreza": 16}, "historia")
+            database.salvar_personagem(2, 1, "Kira", "Ladina", "Elfica", {"Destreza": 16}, "historia", "ladina reservada; coleciona chaves")
             self.assertEqual(database.obter_sessao(1)["contexto"], "contexto")
             self.assertEqual(database.obter_personagem(2, 1)["atributos"], {"Destreza": 16})
 
@@ -88,8 +88,8 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(len(database.listar_jogadores(1)), 1)
             self.assertEqual(database.historico_recente(1)[0]["acao"], "explorar")
             database.criar_sessao(1, "segundo")
-            self.assertEqual(database.listar_jogadores(1), [])
-            self.assertEqual(database.historico_recente(1), [])
+            self.assertEqual(len(database.listar_jogadores(1)), 1)
+            self.assertEqual(database.historico_recente(1)[0]["acao"], "explorar")
 
     def test_ai_evaluation_validation(self):
         narrator = Narrator("")
@@ -105,6 +105,17 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(ficha["atributos"]["Força"], 30)
         self.assertEqual(ficha["atributos"]["Destreza"], 10)
         self.assertEqual(set(ficha["atributos"]), {"Força", "Destreza", "Constituição", "Inteligência", "Sabedoria", "Carisma"})
+
+    def test_character_details_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(str(Path(directory) / "test.db"))
+            database.criar_sessao(1, "aventura")
+            database.salvar_personagem(
+                2, 1, "Kira", "Ladina", "Elfa",
+                {"Destreza": 16}, "historia", "profissão: batedora; mania: colecionar chaves"
+            )
+            personagem = database.obter_personagem(2, 1)
+            self.assertEqual(personagem["detalhes"], "profissão: batedora; mania: colecionar chaves")
 
     def test_two_players_survive_join(self):
         with tempfile.TemporaryDirectory() as directory:
