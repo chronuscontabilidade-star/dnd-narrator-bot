@@ -19,6 +19,7 @@ from .adventure import AdventureState
 from .character import Character
 from .combat import CombatState, Combatant, combatant_from_character
 from .engine import GameEngine
+from .director import SceneDirector
 
 
 class PlayerAgent(Protocol):
@@ -29,6 +30,26 @@ class PlayerAgent(Protocol):
 
 
 @dataclass(frozen=True)
+class GoalDrivenPlayerAgent:
+    """Agente determinístico que tenta progredir usando o estado da campanha."""
+
+    def choose_action(self, state: AdventureState, character: Character, step: int) -> str:
+        current_id = state.data.get("progresso", {}).get("local_atual")
+        current = next(
+            (loc for loc in state.data.get("locais", []) if loc.get("id") == current_id),
+            None,
+        )
+        if current:
+            for connection in current.get("conexoes", []):
+                location = next(
+                    (loc for loc in state.data.get("locais", []) if loc.get("id") == connection),
+                    None,
+                )
+                if location and location.get("descoberto"):
+                    return f"ir para {location.get('nome')}"
+        return "investigar a área"
+
+
 class ScriptedPlayerAgent:
     """Agente previsível para testes de regressão."""
 
@@ -59,6 +80,9 @@ class SimulationReport:
     locations_discovered: int = 0
     events: list[str] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
+    director_levels: list[str] = field(default_factory=list)
+    suggestions_presented: int = 0
+    loops_detected: int = 0
 
     @property
     def passed(self) -> bool:
@@ -77,6 +101,7 @@ class CampaignSimulator:
     def __init__(self, *, engine: GameEngine | None = None, rng=None):
         self.engine = engine or GameEngine()
         self.rng = rng
+        self.director = SceneDirector()
 
     def run(
         self,
@@ -105,6 +130,20 @@ class CampaignSimulator:
                 action = agent.choose_action(state, character, step)
                 if not isinstance(action, str) or not action.strip():
                     raise ValueError("PlayerAgent retornou uma ação vazia.")
+
+                suggestion = self.director.evaluate(
+                    state,
+                    recent_steps=step,
+                    progress_since_last_scene=bool(report.events),
+                )
+                report.director_levels.append(suggestion.level)
+                if suggestion.level == "suggestion":
+                    report.suggestions_presented += 1
+
+                if self._is_repeated_action(report.events, action):
+                    report.loops_detected += 1
+                    if report.loops_detected >= 3:
+                        raise RuntimeError("Loop de ações detectado no simulador.")
 
                 report.steps += 1
                 state = self._resolve_action(
@@ -137,6 +176,11 @@ class CampaignSimulator:
             state.data["progresso"].get("locais_descobertos", [])
         )
         return SimulationResult(state=state, report=report)
+
+    def _is_repeated_action(self, events: list[str], action: str) -> bool:
+        normalized = action.strip().lower()
+        recent = [event for event in events[-3:] if event.startswith("acao:")]
+        return len(recent) >= 2 and all(normalized in event for event in recent[-2:])
 
     def _quest_completed(self, state: AdventureState) -> bool:
         return any(
@@ -477,6 +521,7 @@ __all__ = [
     "SimulationReport",
     "SimulationResult",
     "build_vertical_slice_adventure",
+    "GoalDrivenPlayerAgent",
 ]
 
 
