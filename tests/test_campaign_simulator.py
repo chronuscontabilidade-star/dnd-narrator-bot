@@ -282,6 +282,29 @@ class CampaignSimulatorTests(unittest.TestCase):
             any("broken_location_connection" in failure for failure in result.report.failures)
         )
 
+
+    def test_adventure_validator_flags_unreachable_location_as_warning(self):
+        state = build_vertical_slice_adventure().to_dict()
+        state["locais"].append({
+            "id": "torre_isolada",
+            "nome": "Torre Isolada",
+            "tipo": "outro",
+            "descricao": "Uma torre sem acesso.",
+            "descoberto": False,
+            "visitado": False,
+            "conexoes": [],
+            "encontros": [],
+        })
+        issues = AdventureValidator().validate(AdventureState.from_dict(state))
+        issue = next(item for item in issues if item.code == "unreachable_location")
+        self.assertEqual(issue.severity, "warning")
+
+    def test_adventure_validator_rejects_empty_quest(self):
+        state = build_vertical_slice_adventure().to_dict()
+        state["quests"][0]["etapas"] = []
+        issues = AdventureValidator().validate(AdventureState.from_dict(state))
+        self.assertIn("quest_without_steps", {issue.code for issue in issues})
+
     def test_invalid_initial_campaign_is_reported(self):
         state = build_vertical_slice_adventure().to_dict()
         state["progresso"]["local_atual"] = "nao_existe"
