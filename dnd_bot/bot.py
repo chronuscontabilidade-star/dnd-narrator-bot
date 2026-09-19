@@ -483,12 +483,8 @@ async def cmd_ficha(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not p:
         await update.message.reply_text("❌ Você ainda não tem personagem. Use /start.")
         return
-    await enviar_texto_seguro(
-        update,
-        f"📜 {p['nome']} — {p['classe']} {p['raca']}\n\n"
-        f"{formatar_atributos(p['atributos'])}\n\n"
-        f"📖 {p['historia']}"
-    )
+    await enviar_texto_seguro(update, formatar_ficha_completa(p))
+
 
 
 # ─── /jogadores ───────────────────────────────────────────────────────────────
