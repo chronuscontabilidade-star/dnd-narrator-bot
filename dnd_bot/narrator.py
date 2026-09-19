@@ -282,8 +282,11 @@ class Narrator:
     async def criar_personagem(self, nome: str, classe: str, raca: str, detalhes: str = "") -> dict:
         prompt = (
             "Crie uma ficha de personagem de D&D 5e em JSON com chaves 'atributos' e 'historia'. "
-            "Use valores entre 8 e 18. Mantenha fidelidade à classe, raça e detalhes. "
-            f"Nome: {nome}. Classe: {classe}. Raça: {raca}. Detalhes: {detalhes or 'nenhum'}."
+            "Use valores entre 8 e 18. Mantenha fidelidade à raça, classe e ao conceito fornecido. "
+            "A história deve parecer escrita especificamente para esse personagem: conecte raça, classe, "
+            "profissão, arquétipo, manias, medos, objetivos e demais detalhes fornecidos. "
+            "Não contradiga os detalhes do jogador e não invente uma raça ou classe diferente. "
+            f"Nome: {nome}. Raça: {raca}. Classe: {classe}. Conceito e detalhes do jogador: {detalhes or 'nenhum'}."
         )
         try:
             data = await self._request_json(prompt)
