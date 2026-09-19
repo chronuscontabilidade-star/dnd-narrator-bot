@@ -304,7 +304,10 @@ class Narrator:
             if isinstance(data, dict):
                 historia = str(data.get("historia") or "").strip()
                 if historia:
-                    from .game.character_creation import gerar_atributos
+                    try:
+                        from .game.character_creation import gerar_atributos
+                    except ImportError:
+                        from game.character_creation import gerar_atributos
                     return {
                         "atributos": gerar_atributos(classe, raca),
                         "historia": historia[:4000],
