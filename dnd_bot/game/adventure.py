@@ -252,7 +252,13 @@ Retorne SOMENTE JSON válido, sem markdown.
       "status": "ativa",
       "objetivo": "...",
       "etapas": [
-        {"id": "id", "descricao": "...", "status": "pendente", "local_objetivo": null}
+        {
+          "id": "id",
+          "descricao": "...",
+          "status": "pendente",
+          "local_objetivo": null,
+          "alvo": {"tipo": "local|encounter|item|npc|segredo|flag", "id": "id_existente"}
+        }
       ]
     }
   ],
@@ -293,6 +299,9 @@ Regras de geração:
 - Inclua encontros potenciais, mas NÃO force todos a acontecerem.
 - Inclua pelo menos 1 segredo ou informação que possa ser descoberta.
 - Faça conexões coerentes entre os locais.
+- Em cada etapa relevante de quest, prefira preencher `alvo` com o tipo e id do recurso necessário para concluí-la.
+- Para uma etapa de local, `alvo.tipo` deve ser `local`; para encontro, `encounter`; para item, `item`; para NPC, `npc`.
+- O alvo deve referenciar uma entidade existente no próprio JSON.
 - Não escreva uma aventura linear completa. Crie possibilidades e estado inicial.
 - O Game Engine decidirá testes, combate, movimento e consequências mecânicas.
 - A IA será responsável pela criatividade e pela narrativa, não por inventar
