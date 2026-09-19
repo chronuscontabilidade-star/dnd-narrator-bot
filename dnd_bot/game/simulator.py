@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from .action import ActionResolver
+from .action import ActionResolver, normalize
 from .adventure import AdventureState
 from .character import Character
 from .combat import CombatState, Combatant, combatant_from_character
@@ -83,6 +83,7 @@ class SimulationReport:
     director_levels: list[str] = field(default_factory=list)
     suggestions_presented: int = 0
     loops_detected: int = 0
+    action_history: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -131,36 +132,32 @@ class CampaignSimulator:
                 if not isinstance(action, str) or not action.strip():
                     raise ValueError("PlayerAgent retornou uma ação vazia.")
 
+                idle_steps = self._idle_steps(report)
                 suggestion = self.director.evaluate(
                     state,
-                    recent_steps=step,
-                    progress_since_last_scene=bool(report.events),
+                    recent_steps=idle_steps,
+                    progress_since_last_scene=not self._has_been_idle(report),
                 )
                 report.director_levels.append(suggestion.level)
-                if suggestion.level == "suggestion":
+                if suggestion.level in {"suggestion", "intervention"}:
                     report.suggestions_presented += 1
 
-                if self._is_repeated_action(report.events, action):
+                normalized_action = normalize(action)
+                if self._is_repeated_action(report.action_history, normalized_action):
                     report.loops_detected += 1
                     if report.loops_detected >= 3:
                         raise RuntimeError("Loop de ações detectado no simulador.")
 
+                before = self._state_signature(state)
+                report.action_history.append(normalized_action)
                 report.steps += 1
-                state = self._resolve_action(
-                    state,
-                    character,
-                    action,
-                    report,
-                )
+                state = self._resolve_action(state, character, action, report)
 
-                if step == 4 and include_combat:
-                    state = self._run_combat(state, character, report)
+                if include_combat:
+                    state = self._run_pending_encounters(state, character, report)
 
-            if not self._quest_completed(state):
-                # O simulador vertical tem uma etapa determinística de desfecho
-                # para validar persistência da quest mesmo que o agente tenha
-                # ficado preso em ações narrativas.
-                state = self._finish_vertical_quest(state, report)
+                after = self._state_signature(state)
+                report.events.append("sem_progresso" if before == after else "progresso")
 
             if self._quest_completed(state):
                 report.quests_completed = len(state.data["progresso"].get("quests_concluidas", []))
@@ -177,10 +174,23 @@ class CampaignSimulator:
         )
         return SimulationResult(state=state, report=report)
 
-    def _is_repeated_action(self, events: list[str], action: str) -> bool:
-        normalized = action.strip().lower()
-        recent = [event for event in events[-3:] if event.startswith("acao:")]
-        return len(recent) >= 2 and all(normalized in event for event in recent[-2:])
+    def _is_repeated_action(self, history: list[str], action: str) -> bool:
+        return len(history) >= 2 and history[-1] == action and history[-2] == action
+
+    def _idle_steps(self, report: SimulationReport) -> int:
+        idle = 0
+        for event in reversed(report.events):
+            if event == "sem_progresso":
+                idle += 1
+            elif event == "progresso":
+                break
+        return idle
+
+    def _has_been_idle(self, report: SimulationReport) -> bool:
+        return self._idle_steps(report) > 0
+
+    def _state_signature(self, state: AdventureState) -> str:
+        return state.to_json()
 
     def _quest_completed(self, state: AdventureState) -> bool:
         return any(
@@ -310,14 +320,41 @@ class CampaignSimulator:
             discovered_location=target["id"],
         )
 
-    def _run_combat(
+    def _run_pending_encounters(
         self,
         state: AdventureState,
         character: Character,
         report: SimulationReport,
     ) -> AdventureState:
+        """Dispara apenas encontros de combate pendentes no local atual."""
+        current_id = state.data["progresso"].get("local_atual")
+        encounters = [
+            encounter for encounter in state.data.get("encounters", [])
+            if encounter.get("local") == current_id
+            and encounter.get("status") == "pendente"
+            and encounter.get("tipo") == "combate"
+        ]
+        for encounter in encounters:
+            state = self._run_combat(
+                state,
+                character,
+                report,
+                encounter_id=encounter["id"],
+                enemy_name=(encounter.get("inimigos") or ["Inimigo"])[0],
+            )
+        return state
+
+    def _run_combat(
+        self,
+        state: AdventureState,
+        character: Character,
+        report: SimulationReport,
+        *,
+        encounter_id: str = "encontro_guardiao",
+        enemy_name: str = "Guarda da Cripta",
+    ) -> AdventureState:
         enemy = Combatant(
-            name="Guarda da Cripta",
+            name=enemy_name,
             armor_class=10,
             max_hp=8,
             hp=8,
@@ -368,34 +405,10 @@ class CampaignSimulator:
             event_type="combate",
             description="O encontro de teste foi concluído.",
         )
-        state = state.complete_encounter("encontro_guardiao")
-        state = state.complete_quest_step("quest_cinzas", "derrotar_guardiao")
+        state = state.complete_encounter(encounter_id)
+        if encounter_id == "encontro_guardiao":
+            state = state.complete_quest_step("quest_cinzas", "derrotar_guardiao")
         return state
-
-    def _finish_vertical_quest(
-        self,
-        state: AdventureState,
-        report: SimulationReport,
-    ) -> AdventureState:
-        quest = next(
-            (
-                item
-                for item in state.data["quests"]
-                if item.get("status") != "concluida"
-            ),
-            None,
-        )
-        if not quest:
-            return state
-
-        steps = quest.get("etapas", [])
-        for step in steps:
-            if step.get("status") != "concluida":
-                state = state.complete_quest_step(quest["id"], step["id"])
-
-        report.events.append(f"quest:{quest['id']}:concluida")
-        return state
-
 
 def build_vertical_slice_adventure() -> AdventureState:
     """Cria um cenário pequeno e determinístico para o primeiro simulador."""
