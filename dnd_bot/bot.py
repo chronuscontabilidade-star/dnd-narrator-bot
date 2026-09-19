@@ -335,18 +335,34 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    # Passo 3 — Gemini narra com o resultado real do dado
-    # Releia o estado após a chamada da IA: outro jogador pode ter agido durante o processamento.
+    # Passo 3 — O narrador descreve o resultado real da ação.
+    # Importante: uma falha do provedor de IA não pode colocar o jogo em loop.
     sessao_atual = db.obter_sessao(chat_id) or sessao
     historico = db.historico_recente(chat_id, limite=10)
     resultado = await narrator.narrar_acao_com_dado(sessao_atual, p, jogadores, acao, teste, historico)
     novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
-    if not db.atualizar_contexto(chat_id, novo_ctx, contexto_anterior=sessao_atual["contexto"]):
-        # Estado mudou durante a narrativa. Não sobrescreva o estado do outro jogador.
-        sessao_atual = db.obter_sessao(chat_id) or sessao_atual
-        resultado = await narrator.narrar_acao_com_dado(sessao_atual, p, jogadores, acao, teste, db.historico_recente(chat_id, 10))
-        novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
-        db.atualizar_contexto(chat_id, novo_ctx, contexto_anterior=sessao_atual["contexto"])
+
+    # Se a IA devolver exatamente o mesmo contexto, força uma progressão mínima.
+    if novo_ctx.strip() == sessao_atual["contexto"].strip():
+        status = "sucesso" if teste and teste.get("sucesso") else "resultado narrativo"
+        novo_ctx = (
+            f"{sessao_atual['contexto']}\n"
+            f"Evento: {p['nome']} realizou '{acao}'. Resultado: {status}."
+        )
+
+    atualizado = db.atualizar_contexto(
+        chat_id,
+        novo_ctx,
+        contexto_anterior=sessao_atual["contexto"],
+    )
+
+    if not atualizado:
+        # Outro jogador avançou a cena enquanto esta ação era processada.
+        # Não rode a IA novamente: isso duplicava a mesma ação quando o provider falhava.
+        sessao_pos_concorrencia = db.obter_sessao(chat_id)
+        if sessao_pos_concorrencia:
+            log.info("Contexto mudou durante /acao de %s; evitando nova narração duplicada.", user_id)
+
     db.registrar_acao(user_id, chat_id, acao, resultado["narrativa"])
 
     sugestoes_txt = formatar_sugestoes(resultado.get("sugestoes", []))
