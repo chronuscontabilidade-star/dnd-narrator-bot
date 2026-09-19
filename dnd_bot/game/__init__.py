@@ -32,6 +32,7 @@ from .simulator import (
 )
 from .director import SceneDirector, SceneSuggestion
 from .party import DecisionResolution, PartyDecision, PartyDecisionResolver, PartyVote
+from .participation import PartyParticipation, PartyParticipationResolver, ParticipationResolution
 from .rules import (
     ability_modifier,
     ability_check,
@@ -66,6 +67,9 @@ __all__ = [
     "PartyDecision",
     "PartyDecisionResolver",
     "PartyVote",
+    "PartyParticipation",
+    "PartyParticipationResolver",
+    "ParticipationResolution",
     "InitiativeResult",
     "MoveResult",
     "TurnState",
