@@ -318,7 +318,8 @@ O sistema cria pressão, mas não escolhe a ação pelo jogador.
 - [x] Empates.
 - [x] Jogadores que não votaram.
 - [x] Execução da ação vencedora.
-- [ ] Testes individuais para participantes.
+- [x] Participação individual após decisão.
+- [x] Testes individuais podem ser encaminhados ao GameEngine por personagem.
 - [ ] Narração dos resultados individuais.
 - [x] Registrar a decisão como evento.
 - [x] Pipeline determinístico Decision → Vote → Resolution.
