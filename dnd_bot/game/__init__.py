@@ -33,6 +33,7 @@ from .simulator import (
 from .director import SceneDirector, SceneSuggestion
 from .party import DecisionResolution, PartyDecision, PartyDecisionResolver, PartyVote
 from .participation import PartyParticipation, PartyParticipationResolver, ParticipationResolution
+from .validator import AdventureValidator, ValidationIssue
 from .rules import (
     ability_modifier,
     ability_check,
@@ -80,4 +81,6 @@ __all__ = [
     "roll_d20",
     "saving_throw",
     "SKILLS",
+    "AdventureValidator",
+    "ValidationIssue",
 ]
