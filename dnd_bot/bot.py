@@ -218,7 +218,7 @@ async def finalizar_personagem(update, ctx, estado):
             intro = {"titulo": "Campanha em andamento", "narrativa": "Você entrou na campanha existente. O Mestre mantém o estado atual da aventura.", "contexto": sessao_existente["contexto"]}
         else:
             intro = await narrator.iniciar_aventura(chat_id)
-            db.criar_sessao(chat_id, intro["contexto"])
+            db.criar_sessao(chat_id, intro["contexto"], aventura=intro)
         db.salvar_personagem(update.effective_user.id, chat_id, p["nome"], p["classe"], p["raca"], atributos, ficha["historia"], p.get("detalhes", ""))
     except Exception:
         log.exception("Falha ao finalizar criação do personagem")
@@ -265,7 +265,7 @@ async def cmd_nova_aventura(update, ctx):
         )
         return
     intro = await narrator.iniciar_aventura(chat_id)
-    db.criar_sessao(chat_id, intro["contexto"], reset=True)
+    db.criar_sessao(chat_id, intro["contexto"], reset=True, aventura=intro)
     await update.message.reply_text(
         f"🆕 Nova aventura criada: {intro['titulo']}\n\n"
         "Use /start para criar o personagem desta nova partida."
