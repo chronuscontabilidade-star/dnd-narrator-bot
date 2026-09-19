@@ -110,5 +110,65 @@ class CharacterTests(unittest.TestCase):
         self.assertTrue(result.success)
 
 
+class ActionResolverTests(unittest.TestCase):
+    def setUp(self):
+        self.adventure = {
+            "locais": [
+                {"id": "inicio", "nome": "Taverna do Corvo", "descoberto": True, "conexoes": ["cripta"]},
+                {"id": "cripta", "nome": "Cripta Antiga", "descoberto": False, "conexoes": ["inicio"]},
+            ]
+        }
+
+    def test_explorar_uses_investigacao(self):
+        from dnd_bot.game.action import ActionResolver
+        intent = ActionResolver(self.adventure).resolve("explorar a passagem")
+        self.assertEqual(intent.tipo, "investigacao")
+        self.assertEqual(intent.habilidade, "Investigação")
+        self.assertEqual(intent.atributo, "Inteligência")
+        self.assertTrue(intent.requer_teste)
+
+    def test_enter_known_destination_is_movement_without_roll(self):
+        from dnd_bot.game.action import ActionResolver
+        intent = ActionResolver(self.adventure).resolve("entrar na Cripta Antiga")
+        self.assertEqual(intent.tipo, "movimento")
+        self.assertEqual(intent.destino, "cripta")
+        self.assertFalse(intent.requer_teste)
+
+    def test_observe_is_routine(self):
+        from dnd_bot.game.action import ActionResolver
+        intent = ActionResolver(self.adventure).resolve("observar")
+        self.assertEqual(intent.tipo, "narrativa")
+        self.assertFalse(intent.requer_teste)
+
+    def test_listen_uses_perception(self):
+        from dnd_bot.game.action import ActionResolver
+        intent = ActionResolver(self.adventure).resolve("tentar ouvir se tem alguém atrás da porta")
+        self.assertEqual(intent.tipo, "percepcao")
+        self.assertEqual(intent.habilidade, "Percepção")
+        self.assertEqual(intent.atributo, "Sabedoria")
+        self.assertTrue(intent.requer_teste)
+
+    def test_force_door_uses_athletics(self):
+        from dnd_bot.game.action import ActionResolver
+        intent = ActionResolver(self.adventure).resolve("arrombar a porta")
+        self.assertEqual(intent.habilidade, "Atletismo")
+        self.assertEqual(intent.atributo, "Força")
+        self.assertTrue(intent.requer_teste)
+
+    def test_social_action_maps_to_skill(self):
+        from dnd_bot.game.action import ActionResolver
+        intent = ActionResolver(self.adventure).resolve("persuadir o taverneiro")
+        self.assertEqual(intent.habilidade, "Persuasão")
+        self.assertEqual(intent.atributo, "Carisma")
+        self.assertTrue(intent.requer_teste)
+
+    def test_steal_maps_to_sleight_of_hand(self):
+        from dnd_bot.game.action import ActionResolver
+        intent = ActionResolver(self.adventure).resolve("tentar furtar a chave")
+        self.assertEqual(intent.habilidade, "Prestidigitação")
+        self.assertEqual(intent.atributo, "Destreza")
+        self.assertTrue(intent.requer_teste)
+
+
 if __name__ == "__main__":
     unittest.main()
