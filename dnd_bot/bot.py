@@ -229,10 +229,17 @@ async def cmd_iniciar_historia(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         atributos = {**ATRIBUTOS_PADRAO, **ficha.get("atributos", {})}
         if not ficha.get("historia"):
             raise ValueError("ficha incompleta")
-        intro = await narrator.iniciar_aventura(update.effective_chat.id)
-        # Não resetar a campanha ao adicionar um jogador. A nova campanha
-        # deve ser criada explicitamente por /nova_aventura.
-        if not db.obter_sessao(update.effective_chat.id):
+        sessao_existente = db.obter_sessao(update.effective_chat.id)
+        # O primeiro jogador cria a campanha. Jogadores seguintes apenas entram
+        # na campanha existente e nunca recebem uma aventura paralela.
+        if sessao_existente:
+            intro = {
+                "titulo": "Campanha em andamento",
+                "narrativa": "Você entrou na campanha existente. O Mestre já mantém o estado atual da aventura.",
+                "contexto": sessao_existente["contexto"],
+            }
+        else:
+            intro = await narrator.iniciar_aventura(update.effective_chat.id)
             db.criar_sessao(update.effective_chat.id, intro["contexto"])
         db.salvar_personagem(
             update.effective_user.id, update.effective_chat.id,
