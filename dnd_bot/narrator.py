@@ -402,15 +402,37 @@ class Narrator:
             log.warning("IA indisponível para narrar ação; usando fallback offline: %s", exc)
 
         contexto = sessao.get("contexto", "")
-        narr = (
-            f"{personagem.get('nome')} tenta: {acao}. A ação se desenrola com tensão, improviso e atenção ao ambiente. "
-            "O ritmo da cena se altera, e o que antes era apenas um risco agora se torna um momento decisivo."
-        )
-        novo_contexto = f"{contexto} Progressão: ação 1. Última ação de {personagem.get('nome')}: {acao}. Resultado: {narr}"
+        nome = personagem.get("nome", "O personagem")
+        texto = (acao or "").strip()
+        normalizado = self._normalizar_acao(texto)
+
+        # Fallback offline deve continuar a aventura, não repetir uma frase genérica.
+        if "entrar" in normalizado and ("cripta" in normalizado or "caverna" in normalizado or "torre" in normalizado):
+            narr = f"{nome} entra cuidadosamente no local. O ar muda assim que atravessa a passagem, e a entrada fica para trás enquanto os sons do lado de fora começam a desaparecer."
+            evento = f"{nome} entrou no local."
+        elif any(palavra in normalizado for palavra in ("procurar", "buscar", "investigar", "inspecionar", "analisar")):
+            narr = f"{nome} examina o ambiente em busca de algo fora do lugar. Entre marcas, objetos e detalhes aparentemente comuns, há sinais que podem revelar uma pista."
+            evento = f"{nome} procurou pistas no ambiente."
+        elif any(palavra in normalizado for palavra in ("olhar", "observar", "ver")):
+            narr = f"{nome} observa atentamente os arredores. A posição das entradas, os sons e os movimentos ao redor ficam mais claros."
+            evento = f"{nome} observou os arredores."
+        elif any(palavra in normalizado for palavra in ("falar", "perguntar", "dizer", "conversar")):
+            narr = f"{nome} inicia uma conversa e coloca sua intenção às claras. A reação de quem está por perto passa a fazer parte da cena."
+            evento = f"{nome} iniciou uma conversa."
+        else:
+            narr = f"{nome} realiza a ação: {texto}. A cena avança a partir dessa decisão."
+            evento = f"{nome} realizou a ação: {texto}."
+
+        resultado_txt = "teste bem-sucedido" if teste and teste.get("sucesso") else "teste falho" if teste else "sem teste"
+        novo_contexto = (
+            f"{contexto}\n"
+            f"Evento: {evento} Resultado: {resultado_txt}"
+        ).strip()
+
         sugestoes = [
-            "Inspecionar a área em busca de pistas",
-            "Confrontar o inimigo mais próximo",
-            "Explorar a passagem oculta indicada pela cena",
+            "Continuar explorando o local",
+            "Observar detalhes importantes da cena",
+            "Interagir com alguém ou alguma coisa presente",
         ]
         return {"narrativa": narr, "novo_contexto": novo_contexto, "sugestoes": sugestoes}
 
