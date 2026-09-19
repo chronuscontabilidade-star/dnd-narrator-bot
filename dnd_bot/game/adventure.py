@@ -252,7 +252,7 @@ Retorne SOMENTE JSON válido, sem markdown.
       "status": "ativa",
       "objetivo": "...",
       "etapas": [
-        {"id": "id", "descricao": "...", "status": "pendente"}
+        {"id": "id", "descricao": "...", "status": "pendente", "local_objetivo": null}
       ]
     }
   ],
