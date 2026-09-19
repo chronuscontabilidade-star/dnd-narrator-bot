@@ -305,6 +305,13 @@ class CampaignSimulatorTests(unittest.TestCase):
         issues = AdventureValidator().validate(AdventureState.from_dict(state))
         self.assertIn("quest_without_steps", {issue.code for issue in issues})
 
+
+    def test_adventure_validator_detects_broken_quest_location(self):
+        state = build_vertical_slice_adventure().to_dict()
+        state["quests"][0]["etapas"][0]["local_objetivo"] = "local_inexistente"
+        issues = AdventureValidator().validate(AdventureState.from_dict(state))
+        self.assertIn("broken_quest_location", {issue.code for issue in issues})
+
     def test_invalid_initial_campaign_is_reported(self):
         state = build_vertical_slice_adventure().to_dict()
         state["progresso"]["local_atual"] = "nao_existe"
