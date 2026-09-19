@@ -66,6 +66,70 @@ class AdventureState:
         return json.dumps(self.data, ensure_ascii=False, separators=(",", ":"))
 
 
+    def update_progress(self, *, current_location: str | None = None,
+                        discovered_location: str | None = None,
+                        visited_location: str | None = None,
+                        event: dict[str, Any] | None = None) -> "AdventureState":
+        """Aplica mudanças pequenas e determinísticas ao estado da aventura."""
+        data = self.to_dict()
+        progress = data["progresso"]
+        if current_location is not None:
+            progress["local_atual"] = current_location
+        if discovered_location:
+            discovered = progress.setdefault("locais_descobertos", [])
+            if discovered_location not in discovered:
+                discovered.append(discovered_location)
+            for location in data["locais"]:
+                if location.get("id") == discovered_location:
+                    location["descoberto"] = True
+                    break
+        if visited_location:
+            visited = progress.setdefault("locais_visitados", [])
+            if visited_location not in visited:
+                visited.append(visited_location)
+            for location in data["locais"]:
+                if location.get("id") == visited_location:
+                    location["visitado"] = True
+                    break
+        if event:
+            progress.setdefault("eventos_importantes", []).append(deepcopy(event))
+        return AdventureState.from_dict(data)
+
+    def reveal_secret(self, secret_id: str) -> "AdventureState":
+        data = self.to_dict()
+        for secret in data.get("segredos", []):
+            if secret.get("id") == secret_id:
+                secret["revelado"] = True
+                break
+        return AdventureState.from_dict(data)
+
+    def complete_encounter(self, encounter_id: str) -> "AdventureState":
+        data = self.to_dict()
+        for encounter in data.get("encounters", []):
+            if encounter.get("id") == encounter_id:
+                encounter["status"] = "concluido"
+                break
+        completed = data["progresso"].setdefault("encounters_concluidos", [])
+        if encounter_id not in completed:
+            completed.append(encounter_id)
+        return AdventureState.from_dict(data)
+
+    def complete_quest_step(self, quest_id: str, step_id: str) -> "AdventureState":
+        data = self.to_dict()
+        for quest in data.get("quests", []):
+            if quest.get("id") != quest_id:
+                continue
+            for step in quest.get("etapas", []):
+                if step.get("id") == step_id:
+                    step["status"] = "concluida"
+            if quest.get("etapas") and all(step.get("status") == "concluida" for step in quest["etapas"]):
+                quest["status"] = "concluida"
+                completed = data["progresso"].setdefault("quests_concluidas", [])
+                if quest_id not in completed:
+                    completed.append(quest_id)
+        return AdventureState.from_dict(data)
+
+
 def empty_adventure_state(
     *,
     titulo: str,
