@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 
 try:
-    import google.generativeai as genai
+    from google import genai
 except Exception:  # pragma: no cover - SDK optional in offline environments
     genai = None
 
@@ -36,19 +36,15 @@ class Narrator:
         self.bastiao_model = os.getenv("BASTIAO_MODEL", "")
         self._provider_cooldowns = {}
         self._cooldown_seconds = int(os.getenv("AI_PROVIDER_COOLDOWN", "300"))
+        self.client = None
         self.model = None
         self.image_model = None
         self.provider_status = "offline"
 
         if self.api_key and genai is not None:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(
-                model_name=self.model_name,
-                system_instruction=SYSTEM_PROMPT,
-            )
-            self.image_model = genai.GenerativeModel(
-                os.getenv("GEMINI_IMAGE_MODEL", "imagen-3.0-generate-002")
-            )
+            self.client = genai.Client(api_key=self.api_key)
+            self.model = self.client
+            self.image_model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
             self.provider_status = f"gemini:{self.model_name}"
         elif self.api_key:
             self.provider_status = f"gemini-rest:{self.model_name}"
@@ -168,9 +164,16 @@ class Narrator:
         return [{"acao": item, "atributo": "Destreza", "cd": 12, "risco": "médio"} for item in base[:3]]
 
     def _call_gemini_json(self, prompt: str):
-        if not self.api_key or genai is None or not self.model:
+        if not self.api_key or genai is None or not self.client:
             raise RuntimeError("Gemini não configurado")
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config={
+                "system_instruction": SYSTEM_PROMPT,
+                "response_mime_type": "application/json",
+            },
+        )
         text = response.text if hasattr(response, "text") else str(response)
         return self._parse_json(text)
 
@@ -378,20 +381,30 @@ class Narrator:
         return {"descricao": desc, "imagem_bytes": None}
 
     async def gerar_imagem(self, sessao: dict):
-        if not self.api_key or not self.image_model:
+        if not self.api_key or not self.client or not self.image_model:
             return {"imagem_bytes": None, "descricao": "Sem imagem disponível."}
         try:
-            prompt = f"Crie uma cena épica de fantasia para esta situação: {sessao.get('contexto', '')}"
-            response = self.image_model.generate_content(prompt)
-            if hasattr(response, "images") and response.images:
-                return {"imagem_bytes": response.images[0], "descricao": "Cena gerada"}
+            prompt = (
+                "Crie uma cena épica de fantasia para uma campanha de D&D. "
+                f"Situação atual: {sessao.get('contexto', '')}"
+            )
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
+                model=self.image_model,
+                contents=prompt,
+                config={"response_modalities": ["IMAGE"]},
+            )
+            for part in getattr(response, "parts", []) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    return {"imagem_bytes": inline.data, "descricao": "Cena gerada"}
         except Exception as exc:
             log.warning("Imagem falhou; usando fallback textual: %s", exc)
         return {"imagem_bytes": None, "descricao": "Cena textual disponível."}
 
     def _choose_provider(self):
         providers = [
-            ("gemini", self.api_key and genai is not None and self.model is not None),
+            ("gemini", self.api_key and genai is not None and self.client is not None),
             ("alternative", bool(self.alt_api_key and self.alt_base_url and self.alt_model)),
             ("bastiao", bool(self.bastiao_api_key and self.bastiao_base_url and self.bastiao_model)),
         ]
