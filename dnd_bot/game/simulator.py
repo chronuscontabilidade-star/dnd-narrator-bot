@@ -856,16 +856,19 @@ def build_vertical_slice_adventure() -> AdventureState:
                             "id": "descobrir_beco",
                             "descricao": "Descobrir o Beco da Cinza.",
                             "status": "pendente",
+                            "alvo": {"tipo": "local", "id": "beco"},
                         },
                         {
                             "id": "entrar_cripta",
                             "descricao": "Chegar à Cripta de Valdrak.",
                             "status": "pendente",
+                            "alvo": {"tipo": "local", "id": "cripta"},
                         },
                         {
                             "id": "derrotar_guardiao",
                             "descricao": "Superar o guardião.",
                             "status": "pendente",
+                            "alvo": {"tipo": "encounter", "id": "encontro_guardiao"},
                         },
                     ],
                 }
