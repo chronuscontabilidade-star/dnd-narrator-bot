@@ -91,6 +91,21 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(database.listar_jogadores(1), [])
             self.assertEqual(database.historico_recente(1), [])
 
+    def test_ai_evaluation_validation(self):
+        narrator = Narrator("")
+        valid = narrator._validar_avaliacao({"precisa_teste": True, "atributo": "Força", "cd": "99"})
+        self.assertEqual(valid["cd"], 30)
+        self.assertEqual(valid["atributo"], "Força")
+        with self.assertRaises(ValueError):
+            narrator._validar_avaliacao({"precisa_teste": "false"})
+
+    def test_character_sheet_validation_has_all_attributes(self):
+        narrator = Narrator("")
+        ficha = narrator._validar_ficha({"atributos": {"Força": 40, "Destreza": "x"}, "historia": "hist"})
+        self.assertEqual(ficha["atributos"]["Força"], 30)
+        self.assertEqual(ficha["atributos"]["Destreza"], 10)
+        self.assertEqual(set(ficha["atributos"]), {"Força", "Destreza", "Constituição", "Inteligência", "Sabedoria", "Carisma"})
+
 
 if __name__ == "__main__":
     unittest.main()
