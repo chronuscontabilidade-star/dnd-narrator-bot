@@ -21,6 +21,7 @@ from .combat import CombatState, Combatant, combatant_from_character
 from .engine import GameEngine
 from .director import SceneDirector
 from .party import PartyDecision, PartyDecisionResolver, PartyVote
+from .participation import PartyParticipation, PartyParticipationResolver
 
 
 class PlayerAgent(Protocol):
@@ -37,6 +38,16 @@ class PlayerAgent(Protocol):
         step: int,
     ) -> str:
         """Escolhe uma opção quando a party entra em votação."""
+        ...
+
+    def choose_participation(
+        self,
+        selected_option: str,
+        state: AdventureState,
+        character: Character,
+        step: int,
+    ) -> bool:
+        """Decide se o personagem participa da ação aprovada."""
         ...
 
 
@@ -83,6 +94,15 @@ class PartySimulationResult:
 class PersonalityPlayerAgent:
     """Agente determinístico com um perfil simples de decisão."""
     personality: str
+
+    def choose_participation(
+        self,
+        selected_option: str,
+        state: AdventureState,
+        character: Character,
+        step: int,
+    ) -> bool:
+        return self.personality != "cauteloso" or "atacar" not in selected_option.lower()
 
     def choose_vote(
         self,
@@ -132,6 +152,15 @@ class PersonalityPlayerAgent:
 class ScriptedPlayerAgent:
     """Agente previsível para testes de regressão."""
 
+    def choose_participation(
+        self,
+        selected_option: str,
+        state: AdventureState,
+        character: Character,
+        step: int,
+    ) -> bool:
+        return True
+
     def choose_vote(
         self,
         decision: PartyDecision,
@@ -175,6 +204,10 @@ class SimulationReport:
     votes: int = 0
     decisions_accepted: int = 0
     decisions_rejected: int = 0
+    participation_rounds: int = 0
+    participants: int = 0
+    declined_participation: int = 0
+    individual_results: int = 0
     action_history: list[str] = field(default_factory=list)
 
     @property
@@ -311,39 +344,51 @@ class CampaignSimulator:
                     )
 
                 if resolution is not None and resolution.accepted:
-                    executor = next(
-                        member for member in members
-                        if (member.player_id or member.character.name) == resolution.executor_id
-                    )
-                    action = resolution.selected_option
-                    member = executor
-                    if action is None:
-                        raise RuntimeError("Decisão aceita sem ação selecionada.")
-                    action = str(action)
-                    normalized = normalize(action)
-                    before = self._state_signature(state)
-                    report.action_history.append(normalized)
-                    report.steps += 1
-                    decisions += 1
-                    report.events.append(
-                        f"party:acao:{member.character.name}:{normalized}"
-                    )
-                    state = self._resolve_action(
+                    selected = str(resolution.selected_option)
+                    participation = self._party_participation(
+                        resolution.decision_id,
+                        selected,
                         state,
-                        member.character,
-                        action,
+                        members,
+                        decisions,
                         report,
                     )
-                    if include_combat:
-                        state = self._run_pending_encounters(
-                            state,
-                            member.character,
-                            report,
-                        )
-                    after = self._state_signature(state)
-                    report.events.append(
-                        "sem_progresso" if before == after else "progresso"
-                    )
+                    if participation.participants:
+                        for item in participation.participants:
+                            member = next(
+                                m for m in members
+                                if (m.player_id or m.character.name) == item.player_id
+                            )
+                            action = item.action
+                            normalized = normalize(action)
+                            if self._is_repeated_action(report.action_history, normalized):
+                                report.loops_detected += 1
+                                if report.loops_detected >= 3:
+                                    raise RuntimeError("Loop de ações detectado na party.")
+                            before = self._state_signature(state)
+                            report.action_history.append(normalized)
+                            report.steps += 1
+                            decisions += 1
+                            report.events.append(
+                                f"participante:{member.character.name}:acao:{normalized}"
+                            )
+                            state = self._resolve_action(
+                                state,
+                                member.character,
+                                action,
+                                report,
+                            )
+                            report.individual_results += 1
+                            if include_combat:
+                                state = self._run_pending_encounters(
+                                    state,
+                                    member.character,
+                                    report,
+                                )
+                            after = self._state_signature(state)
+                            report.events.append(
+                                "sem_progresso" if before == after else "progresso"
+                            )
                     continue
 
                 for member in members:
@@ -392,6 +437,47 @@ class CampaignSimulator:
             decisions=decisions,
             members=[m.character.name for m in members],
         )
+
+    def _party_participation(
+        self,
+        decision_id: str,
+        selected_option: str,
+        state: AdventureState,
+        members: list[PartyMember],
+        step: int,
+        report: SimulationReport,
+    ):
+        report.participation_rounds += 1
+        items = []
+        for member in members:
+            chooser = getattr(member.agent, "choose_participation", None)
+            participates = (
+                bool(chooser(selected_option, state, member.character, step))
+                if callable(chooser)
+                else True
+            )
+            items.append(
+                PartyParticipation(
+                    player_id=member.player_id or member.character.name,
+                    action=selected_option,
+                    participate=participates,
+                )
+            )
+
+        resolution = PartyParticipationResolver().resolve(
+            decision_id,
+            selected_option,
+            items,
+        )
+        report.participants += len(resolution.participants)
+        report.declined_participation += len(resolution.declined)
+        for participant in resolution.participants:
+            report.events.append(
+                f"participacao:{participant.player_id}:aceita:{normalize(participant.action)}"
+            )
+        for player_id in resolution.declined:
+            report.events.append(f"participacao:{player_id}:recusa")
+        return resolution
 
     def _party_decision(
         self,
