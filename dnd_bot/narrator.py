@@ -359,7 +359,10 @@ class Narrator:
 
     async def avaliar_acao(self, sessao: dict, acao: str) -> dict:
         classificacao = self._classificar_acao_obvia(acao)
-        from dice import detectar_atributo as _det
+        try:
+            from .dice import detectar_atributo as _det
+        except ImportError:
+            from dice import detectar_atributo as _det
         atributo_detectado = _det(acao) or "Destreza"
 
         if classificacao is False:
