@@ -110,6 +110,48 @@ class CharacterTests(unittest.TestCase):
         self.assertTrue(result.success)
 
 
+class CharacterCreationRulesTests(unittest.TestCase):
+    def test_roll_4d6_drop_lowest(self):
+        from dnd_bot.game.character_creation import rolar_atributo
+
+        class FixedRng:
+            values = iter([6, 5, 4, 1])
+
+            def randint(self, _a, _b):
+                return next(self.values)
+
+        total, dice = rolar_atributo(FixedRng())
+        self.assertEqual(dice, [6, 5, 4, 1])
+        self.assertEqual(total, 15)
+
+    def test_race_bonuses_are_applied_without_class_bonuses(self):
+        from dnd_bot.game.character_creation import aplicar_bonuses_raciais
+
+        base = {
+            "Força": 15, "Destreza": 14, "Constituição": 13,
+            "Inteligência": 12, "Sabedoria": 10, "Carisma": 8,
+        }
+        result = aplicar_bonuses_raciais(base, "Meio-Orc")
+        self.assertEqual(result["Força"], 17)
+        self.assertEqual(result["Constituição"], 14)
+        self.assertEqual(result["Destreza"], 14)
+        self.assertEqual(result["Inteligência"], 12)
+
+    def test_generated_character_has_real_ability_modifiers(self):
+        from dnd_bot.game.character_creation import gerar_atributos
+
+        class FixedRng:
+            values = iter([6, 6, 6, 1] * 6)
+
+            def randint(self, _a, _b):
+                return next(self.values)
+
+        result = gerar_atributos("Guerreiro", "Humano", FixedRng())
+        self.assertEqual(set(result), {"Força", "Destreza", "Constituição", "Inteligência", "Sabedoria", "Carisma"})
+        self.assertEqual(result["Força"], 19)
+        self.assertTrue(any((value - 10) // 2 != 0 for value in result.values()))
+
+
 class ActionResolverTests(unittest.TestCase):
     def setUp(self):
         self.adventure = {
