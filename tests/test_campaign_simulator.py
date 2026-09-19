@@ -1,8 +1,10 @@
 import unittest
 
+from dnd_bot.game.adventure import AdventureState
 from dnd_bot.game.character import Character
 from dnd_bot.game.party import PartyDecision, PartyDecisionResolver, PartyVote
 from dnd_bot.game.participation import PartyParticipation, PartyParticipationResolver
+from dnd_bot.game.validator import AdventureValidator
 from dnd_bot.game.simulator import (
     CampaignSimulator,
     GoalDrivenPlayerAgent,
@@ -252,11 +254,37 @@ class CampaignSimulatorTests(unittest.TestCase):
             any(event.startswith("participacao:Lia:aceita:") for event in result.report.events)
         )
 
+
+    def test_adventure_validator_detects_broken_references(self):
+        state = build_vertical_slice_adventure().to_dict()
+        state["locais"][0]["conexoes"].append("local_inexistente")
+        state["npcs"][0]["local_atual"] = "local_inexistente"
+        issues = AdventureValidator().validate(AdventureState.from_dict(state))
+        codes = {issue.code for issue in issues}
+        self.assertIn("broken_location_connection", codes)
+        self.assertIn("broken_npc_location", codes)
+
+    def test_simulator_rejects_invalid_campaign_before_running(self):
+        state = build_vertical_slice_adventure().to_dict()
+        state["locais"][0]["conexoes"].append("local_inexistente")
+        result = CampaignSimulator().run(
+            AdventureState.from_dict(state),
+            Character(
+                name="Teste",
+                race="Humano",
+                class_name="Guerreiro",
+                max_hp=10,
+                hp=10,
+            ),
+        )
+        self.assertEqual(result.report.status, "falhou")
+        self.assertTrue(
+            any("broken_location_connection" in failure for failure in result.report.failures)
+        )
+
     def test_invalid_initial_campaign_is_reported(self):
         state = build_vertical_slice_adventure().to_dict()
         state["progresso"]["local_atual"] = "nao_existe"
-
-        from dnd_bot.game.adventure import AdventureState
 
         result = CampaignSimulator().run(
             AdventureState.from_dict(state),
