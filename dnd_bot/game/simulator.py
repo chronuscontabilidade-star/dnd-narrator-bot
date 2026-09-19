@@ -20,12 +20,23 @@ from .character import Character
 from .combat import CombatState, Combatant, combatant_from_character
 from .engine import GameEngine
 from .director import SceneDirector
+from .party import PartyDecision, PartyDecisionResolver, PartyVote
 
 
 class PlayerAgent(Protocol):
     """Contrato para qualquer agente que possa controlar um personagem."""
 
     def choose_action(self, state: AdventureState, character: Character, step: int) -> str:
+        ...
+
+    def choose_vote(
+        self,
+        decision: PartyDecision,
+        state: AdventureState,
+        character: Character,
+        step: int,
+    ) -> str:
+        """Escolhe uma opção quando a party entra em votação."""
         ...
 
 
@@ -73,6 +84,30 @@ class PersonalityPlayerAgent:
     """Agente determinístico com um perfil simples de decisão."""
     personality: str
 
+    def choose_vote(
+        self,
+        decision: PartyDecision,
+        state: AdventureState,
+        character: Character,
+        step: int,
+    ) -> str:
+        options = decision.options
+        lower = {option.lower(): option for option in options}
+
+        if self.personality == "social":
+            for option in options:
+                if any(word in option.lower() for word in ("conversar", "falar", "negociar")):
+                    return option
+        if self.personality == "cauteloso":
+            for option in options:
+                if any(word in option.lower() for word in ("observar", "investigar")):
+                    return option
+        if self.personality == "agressivo":
+            for option in options:
+                if any(word in option.lower() for word in ("atacar", "combater")):
+                    return option
+        return options[0]
+
     def choose_action(self, state: AdventureState, character: Character, step: int) -> str:
         current_id = state.data.get("progresso", {}).get("local_atual")
         current = next((loc for loc in state.data.get("locais", []) if loc.get("id") == current_id), None)
@@ -96,6 +131,15 @@ class PersonalityPlayerAgent:
 
 class ScriptedPlayerAgent:
     """Agente previsível para testes de regressão."""
+
+    def choose_vote(
+        self,
+        decision: PartyDecision,
+        state: AdventureState,
+        character: Character,
+        step: int,
+    ) -> str:
+        return decision.options[0]
 
     actions: tuple[str, ...] = (
         "investigar a taverna",
@@ -127,6 +171,10 @@ class SimulationReport:
     director_levels: list[str] = field(default_factory=list)
     suggestions_presented: int = 0
     loops_detected: int = 0
+    decision_rounds: int = 0
+    votes: int = 0
+    decisions_accepted: int = 0
+    decisions_rejected: int = 0
     action_history: list[str] = field(default_factory=list)
 
     @property
@@ -243,6 +291,61 @@ class CampaignSimulator:
                 if self._quest_completed(state):
                     break
                 rounds += 1
+                suggestion = self.director.evaluate(
+                    state,
+                    recent_steps=self._idle_steps(report),
+                    progress_since_last_scene=not self._has_been_idle(report),
+                )
+                report.director_levels.append(suggestion.level)
+                if suggestion.level in {"suggestion", "intervention"}:
+                    report.suggestions_presented += 1
+
+                resolution = None
+                if suggestion.level in {"suggestion", "intervention"}:
+                    resolution = self._party_decision(
+                        suggestion,
+                        state,
+                        members,
+                        decisions,
+                        report,
+                    )
+
+                if resolution is not None and resolution.accepted:
+                    executor = next(
+                        member for member in members
+                        if (member.player_id or member.character.name) == resolution.executor_id
+                    )
+                    action = resolution.selected_option
+                    member = executor
+                    if action is None:
+                        raise RuntimeError("Decisão aceita sem ação selecionada.")
+                    action = str(action)
+                    normalized = normalize(action)
+                    before = self._state_signature(state)
+                    report.action_history.append(normalized)
+                    report.steps += 1
+                    decisions += 1
+                    report.events.append(
+                        f"party:acao:{member.character.name}:{normalized}"
+                    )
+                    state = self._resolve_action(
+                        state,
+                        member.character,
+                        action,
+                        report,
+                    )
+                    if include_combat:
+                        state = self._run_pending_encounters(
+                            state,
+                            member.character,
+                            report,
+                        )
+                    after = self._state_signature(state)
+                    report.events.append(
+                        "sem_progresso" if before == after else "progresso"
+                    )
+                    continue
+
                 for member in members:
                     if self._quest_completed(state):
                         break
@@ -289,6 +392,54 @@ class CampaignSimulator:
             decisions=decisions,
             members=[m.character.name for m in members],
         )
+
+    def _party_decision(
+        self,
+        suggestion,
+        state: AdventureState,
+        members: list[PartyMember],
+        step: int,
+        report: SimulationReport,
+    ):
+        """Converte uma sugestão do Director em Decision -> Vote -> Resolution."""
+        if not suggestion.actions:
+            return None
+
+        decision = PartyDecision(
+            id=f"scene-{report.decision_rounds + 1}",
+            prompt="A party quer seguir uma destas oportunidades?",
+            options=tuple(suggestion.actions),
+            reason=suggestion.reason,
+        )
+        report.decision_rounds += 1
+
+        votes = []
+        for member in members:
+            chooser = getattr(member.agent, "choose_vote", None)
+            option = (
+                chooser(decision, state, member.character, step)
+                if callable(chooser)
+                else decision.options[0]
+            )
+            votes.append(
+                PartyVote(
+                    voter_id=member.player_id or member.character.name,
+                    option=option,
+                )
+            )
+        report.votes += len(votes)
+
+        resolution = PartyDecisionResolver().resolve(decision, votes)
+        report.events.append(
+            f"decisao:{decision.id}:"
+            f"{'aceita' if resolution.accepted else 'rejeitada'}:"
+            f"{resolution.selected_option or 'nenhuma'}"
+        )
+        if resolution.accepted:
+            report.decisions_accepted += 1
+        else:
+            report.decisions_rejected += 1
+        return resolution
 
     def _is_repeated_action(self, history: list[str], action: str) -> bool:
         return len(history) >= 2 and history[-1] == action and history[-2] == action
