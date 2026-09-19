@@ -244,6 +244,38 @@ class Narrator:
             log.warning("IA indisponível para iniciar aventura; usando fallback offline: %s", exc)
         return aventura
 
+    @staticmethod
+    def _validar_avaliacao(data: dict) -> dict:
+        if not isinstance(data, dict):
+            raise ValueError("Avaliação da IA não é um objeto JSON")
+        precisa = data.get("precisa_teste")
+        if not isinstance(precisa, bool):
+            raise ValueError("precisa_teste inválido")
+        atributo = data.get("atributo", "Destreza")
+        atributos_validos = {"Força", "Destreza", "Constituição", "Inteligência", "Sabedoria", "Carisma"}
+        if atributo not in atributos_validos:
+            atributo = "Destreza"
+        try:
+            cd = int(data.get("cd", 12))
+        except (TypeError, ValueError):
+            cd = 12
+        cd = max(1, min(cd, 30))
+        return {**data, "precisa_teste": precisa, "atributo": atributo, "cd": cd}
+
+    @staticmethod
+    def _validar_ficha(data: dict) -> dict:
+        if not isinstance(data, dict) or not isinstance(data.get("atributos"), dict) or not data.get("historia"):
+            raise ValueError("Ficha inválida")
+        nomes = {"Força", "Destreza", "Constituição", "Inteligência", "Sabedoria", "Carisma"}
+        atributos = {}
+        for nome in nomes:
+            try:
+                valor = int(data["atributos"].get(nome, 10))
+            except (TypeError, ValueError):
+                valor = 10
+            atributos[nome] = max(1, min(valor, 30))
+        return {"atributos": atributos, "historia": str(data["historia"])[:4000]}
+
     async def criar_personagem(self, nome: str, classe: str, raca: str, detalhes: str = "") -> dict:
         prompt = (
             "Crie uma ficha de personagem de D&D 5e em JSON com chaves 'atributos' e 'historia'. "
@@ -252,11 +284,8 @@ class Narrator:
         )
         try:
             data = await self._request_json(prompt)
-            if isinstance(data, dict) and isinstance(data.get("atributos"), dict) and data.get("historia"):
-                return {
-                    "atributos": {str(k): int(v) for k, v in data["atributos"].items()},
-                    "historia": data["historia"],
-                }
+            if isinstance(data, dict):
+                return self._validar_ficha(data)
         except Exception as exc:
             log.warning("IA indisponível para criar personagem; usando fallback offline: %s", exc)
         return self._offline_personagem(nome, classe, raca, detalhes)
@@ -271,7 +300,7 @@ class Narrator:
             data = await self._request_json(prompt)
             if isinstance(data, dict):
                 if "precisa_teste" in data:
-                    return data
+                    return self._validar_avaliacao(data)
         except Exception as exc:
             log.warning("IA indisponível ao avaliar ação; usando fallback offline: %s", exc)
 
