@@ -22,6 +22,7 @@ from .engine import GameEngine
 from .director import SceneDirector
 from .party import PartyDecision, PartyDecisionResolver, PartyVote
 from .participation import PartyParticipation, PartyParticipationResolver
+from .validator import AdventureValidator
 
 
 class PlayerAgent(Protocol):
@@ -228,6 +229,7 @@ class CampaignSimulator:
         self.engine = engine or GameEngine()
         self.rng = rng
         self.director = SceneDirector()
+        self.validator = AdventureValidator()
 
     def run(
         self,
@@ -247,6 +249,7 @@ class CampaignSimulator:
 
         try:
             self._validate_initial_state(state)
+            self.validator.assert_valid(state)
             report.events.append("campanha_validada")
 
             for step in range(max_steps):
@@ -277,9 +280,11 @@ class CampaignSimulator:
                 report.action_history.append(normalized_action)
                 report.steps += 1
                 state = self._resolve_action(state, character, action, report)
+                self.validator.assert_valid(state)
 
                 if include_combat:
                     state = self._run_pending_encounters(state, character, report)
+                    self.validator.assert_valid(state)
 
                 after = self._state_signature(state)
                 report.events.append("sem_progresso" if before == after else "progresso")
@@ -319,6 +324,7 @@ class CampaignSimulator:
         rounds = 0
         try:
             self._validate_initial_state(state)
+            self.validator.assert_valid(state)
             report.events.append("campanha_validada")
             for _round in range(max_rounds):
                 if self._quest_completed(state):
