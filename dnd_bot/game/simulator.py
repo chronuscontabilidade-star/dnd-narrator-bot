@@ -33,10 +33,11 @@ class ScriptedPlayerAgent:
     """Agente previsível para testes de regressão."""
 
     actions: tuple[str, ...] = (
-        "observar o ambiente",
         "investigar a taverna",
-        "procurar pistas",
-        "falar com o taberneiro",
+        "entrar no Beco da Cinza",
+        "investigar o beco",
+        "entrar na Cripta de Valdrak",
+        "observar o ambiente",
     )
 
     def choose_action(self, state: AdventureState, character: Character, step: int) -> str:
@@ -113,7 +114,7 @@ class CampaignSimulator:
                     report,
                 )
 
-                if step == 2 and include_combat:
+                if step == 4 and include_combat:
                     state = self._run_combat(state, character, report)
 
             if not self._quest_completed(state):
@@ -177,9 +178,52 @@ class CampaignSimulator:
             )
 
             if result.success and intent.tipo in {"investigacao", "percepcao"}:
-                return self._discover_next_location(state, character.name, report)
+                state = self._discover_next_location(state, character.name, report)
+
+        if intent.tipo == "movimento" and intent.destino:
+            state = self._move_character(state, intent.destino, character.name, report)
 
         report.events.append(f"acao:{intent.tipo}")
+        return state
+
+    def _move_character(
+        self,
+        state: AdventureState,
+        destination: str,
+        character_name: str,
+        report: SimulationReport,
+    ) -> AdventureState:
+        progress = state.data["progresso"]
+        current_id = progress.get("local_atual")
+        current = next(
+            (loc for loc in state.data["locais"] if loc.get("id") == current_id),
+            None,
+        )
+        target = next(
+            (loc for loc in state.data["locais"] if loc.get("id") == destination),
+            None,
+        )
+        if not current or not target:
+            raise ValueError("Movimento referencia local inexistente.")
+
+        if destination != current_id and destination not in current.get("conexoes", []):
+            raise ValueError(f"Destino inacessível: {destination}")
+
+        state = self.engine.apply_action_event(
+            state,
+            event_type="movimento",
+            description=f"{character_name} foi para {target.get('nome')}.",
+            current_location=destination,
+            discovered_location=destination,
+            visited_location=destination,
+        )
+
+        if destination == "beco":
+            state = state.complete_quest_step("quest_cinzas", "descobrir_beco")
+        elif destination == "cripta":
+            state = state.complete_quest_step("quest_cinzas", "entrar_cripta")
+
+        report.events.append(f"movimento:{destination}")
         return state
 
     def _discover_next_location(
@@ -269,11 +313,14 @@ class CampaignSimulator:
             raise RuntimeError("Personagem morreu no combate vertical.")
 
         report.events.append("combate:concluido")
-        return self.engine.apply_action_event(
+        state = self.engine.apply_action_event(
             state,
             event_type="combate",
             description="O encontro de teste foi concluído.",
         )
+        state = state.complete_encounter("encontro_guardiao")
+        state = state.complete_quest_step("quest_cinzas", "derrotar_guardiao")
+        return state
 
     def _finish_vertical_quest(
         self,
