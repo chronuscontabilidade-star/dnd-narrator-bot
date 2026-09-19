@@ -97,7 +97,7 @@ class Database:
 
     # ── Sessões ──────────────────────────────────────────────────────────────
 
-    def criar_sessao(self, chat_id: int, contexto: str):
+    def criar_sessao(self, chat_id: int, contexto: str, reset: bool = False):
         agora = datetime.now(timezone.utc).isoformat()
         placeholder = "%s" if self.backend == "postgres" else "?"
         with self._conn() as conn:
@@ -109,11 +109,14 @@ class Database:
                     criada_em=excluded.criada_em,
                     atualizada_em=excluded.atualizada_em
             """, (chat_id, contexto, agora, agora))
-            # Limpa personagens e ações da sessão anterior
-            conn.execute(
-                f"DELETE FROM personagens WHERE chat_id={placeholder}", (chat_id,)
-            )
-            conn.execute(f"DELETE FROM acoes WHERE chat_id={placeholder}", (chat_id,))
+            # A criação da sessão não apaga jogadores por padrão. O reset explícito
+            # é reservado para iniciar uma campanha nova e evita que um segundo
+            # jogador apague os personagens dos demais.
+            if reset:
+                conn.execute(
+                    f"DELETE FROM personagens WHERE chat_id={placeholder}", (chat_id,)
+                )
+                conn.execute(f"DELETE FROM acoes WHERE chat_id={placeholder}", (chat_id,))
 
     def obter_sessao(self, chat_id: int) -> dict | None:
         with self._conn() as conn:
@@ -123,13 +126,22 @@ class Database:
             ).fetchone()
             return dict(row) if row else None
 
-    def atualizar_contexto(self, chat_id: int, novo_contexto: str):
+    def atualizar_contexto(self, chat_id: int, novo_contexto: str, contexto_anterior: str | None = None) -> bool:
         with self._conn() as conn:
             p = "%s" if self.backend == "postgres" else "?"
-            conn.execute(f"""
-                UPDATE sessoes SET contexto={p}, atualizada_em={p}
-                WHERE chat_id={p}
-            """, (novo_contexto, datetime.now(timezone.utc).isoformat(), chat_id))
+            if contexto_anterior is None:
+                cur = conn.execute(f"""
+                    UPDATE sessoes SET contexto={p}, atualizada_em={p}
+                    WHERE chat_id={p}
+                """, (novo_contexto, datetime.now(timezone.utc).isoformat(), chat_id))
+            else:
+                # Compare-and-set: impede que uma ação concorrente sobrescreva
+                # silenciosamente o contexto produzido por outra ação.
+                cur = conn.execute(f"""
+                    UPDATE sessoes SET contexto={p}, atualizada_em={p}
+                    WHERE chat_id={p} AND contexto={p}
+                """, (novo_contexto, datetime.now(timezone.utc).isoformat(), chat_id, contexto_anterior))
+            return cur.rowcount == 1
 
     # ── Personagens ──────────────────────────────────────────────────────────
 
