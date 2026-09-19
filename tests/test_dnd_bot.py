@@ -4,16 +4,48 @@ import unittest
 from pathlib import Path
 
 from dnd_bot.database import Database
+from dnd_bot.game.adventure import AdventureState, SCHEMA_VERSION, adventure_generation_prompt
 from dnd_bot.dice import realizar_teste
 from dnd_bot.narrator import Narrator
 
 
 class NarratorTests(unittest.TestCase):
-    def test_offline_narrator_starts_adventure(self):
+    def test_offline_narrator_starts_structured_adventure(self):
         intro = asyncio.run(Narrator("").iniciar_aventura(123))
-        self.assertTrue(intro["titulo"])
+        state = AdventureState.from_dict(intro)
+        self.assertEqual(state.data["schema_version"], SCHEMA_VERSION)
+        self.assertTrue(state.data["aventura"]["titulo"])
+        self.assertTrue(state.data["locais"])
+        self.assertTrue(state.data["progresso"]["local_atual"])
         self.assertTrue(intro["narrativa"])
         self.assertTrue(intro["contexto"])
+
+    def test_adventure_state_transitions(self):
+        raw = {
+            "schema_version": 1,
+            "aventura": {"id": "a", "titulo": "A", "resumo": "R", "status": "em_andamento"},
+            "mundo": {}, "locais": [
+                {"id": "inicio", "nome": "Inicio", "descoberto": True, "visitado": True, "conexoes": ["cripta"]},
+                {"id": "cripta", "nome": "Cripta", "descoberto": False, "visitado": False, "conexoes": []},
+            ],
+            "npcs": [], "encounters": [], "quests": [], "itens": [], "flags": {},
+            "progresso": {"local_atual": "inicio", "locais_descobertos": ["inicio"],
+                          "locais_visitados": ["inicio"], "npcs_conhecidos": [],
+                          "encounters_concluidos": [], "quests_concluidas": [], "eventos_importantes": []},
+        }
+        state = AdventureState.from_dict(raw)
+        state = state.update_progress(current_location="cripta", discovered_location="cripta", visited_location="cripta")
+        self.assertEqual(state.data["progresso"]["local_atual"], "cripta")
+        self.assertIn("cripta", state.data["progresso"]["locais_descobertos"])
+        self.assertTrue(next(x for x in state.data["locais"] if x["id"] == "cripta")["visitado"])
+
+    def test_adventure_generation_prompt_defines_stable_contract(self):
+        prompt = adventure_generation_prompt()
+        self.assertIn('"schema_version": 1', prompt)
+        self.assertIn('"locais"', prompt)
+        self.assertIn('"npcs"', prompt)
+        self.assertIn('"quests"', prompt)
+        self.assertIn('"progresso"', prompt)
 
     def test_json_parser_accepts_markdown_fence(self):
         parsed = Narrator("")._parse_json("```json\n{\"ok\": true}\n```")
@@ -73,8 +105,11 @@ class DatabaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             database = Database(str(Path(directory) / "test.db"))
             database.criar_sessao(1, "contexto")
-            database.salvar_personagem(2, 1, "Kira", "Ladina", "Elfica", {"Destreza": 16}, "historia")
+            database.salvar_personagem(2, 1, "Kira", "Ladina", "Elfica", {"Destreza": 16}, "historia", "ladina reservada; coleciona chaves")
             self.assertEqual(database.obter_sessao(1)["contexto"], "contexto")
+            adventure = {"schema_version": 1, "aventura": {"id": "teste"}}
+            self.assertTrue(database.atualizar_aventura(1, adventure))
+            self.assertEqual(database.obter_sessao(1)["aventura"], adventure)
             self.assertEqual(database.obter_personagem(2, 1)["atributos"], {"Destreza": 16})
 
     def test_public_operations_and_new_session_cleanup(self):
@@ -88,8 +123,51 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(len(database.listar_jogadores(1)), 1)
             self.assertEqual(database.historico_recente(1)[0]["acao"], "explorar")
             database.criar_sessao(1, "segundo")
-            self.assertEqual(database.listar_jogadores(1), [])
-            self.assertEqual(database.historico_recente(1), [])
+            self.assertEqual(len(database.listar_jogadores(1)), 1)
+            self.assertEqual(database.historico_recente(1)[0]["acao"], "explorar")
+
+    def test_ai_evaluation_validation(self):
+        narrator = Narrator("")
+        valid = narrator._validar_avaliacao({"precisa_teste": True, "atributo": "Força", "cd": "99"})
+        self.assertEqual(valid["cd"], 30)
+        self.assertEqual(valid["atributo"], "Força")
+        with self.assertRaises(ValueError):
+            narrator._validar_avaliacao({"precisa_teste": "false"})
+
+    def test_character_sheet_validation_has_all_attributes(self):
+        narrator = Narrator("")
+        ficha = narrator._validar_ficha({"atributos": {"Força": 40, "Destreza": "x"}, "historia": "hist"})
+        self.assertEqual(ficha["atributos"]["Força"], 30)
+        self.assertEqual(ficha["atributos"]["Destreza"], 10)
+        self.assertEqual(set(ficha["atributos"]), {"Força", "Destreza", "Constituição", "Inteligência", "Sabedoria", "Carisma"})
+
+    def test_character_details_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(str(Path(directory) / "test.db"))
+            database.criar_sessao(1, "aventura")
+            database.salvar_personagem(
+                2, 1, "Kira", "Ladina", "Elfa",
+                {"Destreza": 16}, "historia", "profissão: batedora; mania: colecionar chaves"
+            )
+            personagem = database.obter_personagem(2, 1)
+            self.assertEqual(personagem["detalhes"], "profissão: batedora; mania: colecionar chaves")
+
+    def test_two_players_survive_join(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(str(Path(directory) / "test.db"))
+            database.criar_sessao(1, "aventura")
+            database.salvar_personagem(10, 1, "Kira", "Ladina", "Elfa", {"Destreza": 16}, "h1")
+            database.salvar_personagem(20, 1, "Thorin", "Guerreiro", "Anão", {"Força": 16}, "h2")
+            database.criar_sessao(1, "aventura ainda ativa")
+            self.assertEqual({p["nome"] for p in database.listar_jogadores(1)}, {"Kira", "Thorin"})
+
+    def test_context_compare_and_set_rejects_stale_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(str(Path(directory) / "test.db"))
+            database.criar_sessao(1, "A")
+            self.assertTrue(database.atualizar_contexto(1, "B", contexto_anterior="A"))
+            self.assertFalse(database.atualizar_contexto(1, "C", contexto_anterior="A"))
+            self.assertEqual(database.obter_sessao(1)["contexto"], "B")
 
 
 if __name__ == "__main__":

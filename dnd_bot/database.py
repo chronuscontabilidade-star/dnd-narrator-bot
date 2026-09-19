@@ -52,6 +52,7 @@ class Database:
                 CREATE TABLE IF NOT EXISTS sessoes (
                     chat_id     INTEGER PRIMARY KEY,
                     contexto    TEXT    NOT NULL,
+                    aventura_json TEXT NOT NULL DEFAULT '',
                     criada_em   TEXT    NOT NULL,
                     atualizada_em TEXT  NOT NULL
                 );
@@ -65,6 +66,7 @@ class Database:
                     raca        TEXT    NOT NULL,
                     atributos   TEXT    NOT NULL,  -- JSON
                     historia    TEXT    NOT NULL,
+                    detalhes    TEXT    NOT NULL DEFAULT '',
                     criado_em   TEXT    NOT NULL,
                     UNIQUE(user_id, chat_id)
                 );
@@ -95,25 +97,49 @@ class Database:
             else:
                 conn.executescript(schema)
 
+            # Migrações incrementais.
+            if self.backend == "postgres":
+                conn.execute("ALTER TABLE sessoes ADD COLUMN IF NOT EXISTS aventura_json TEXT NOT NULL DEFAULT ''")
+                conn.execute("ALTER TABLE personagens ADD COLUMN IF NOT EXISTS detalhes TEXT NOT NULL DEFAULT ''")
+            else:
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(personagens)").fetchall()}
+                if "detalhes" not in columns:
+                    conn.execute("ALTER TABLE personagens ADD COLUMN detalhes TEXT NOT NULL DEFAULT ''")
+                session_columns = {row[1] for row in conn.execute("PRAGMA table_info(sessoes)").fetchall()}
+                if "aventura_json" not in session_columns:
+                    conn.execute("ALTER TABLE sessoes ADD COLUMN aventura_json TEXT NOT NULL DEFAULT ''")
+
     # ── Sessões ──────────────────────────────────────────────────────────────
 
-    def criar_sessao(self, chat_id: int, contexto: str):
+    def criar_sessao(
+        self,
+        chat_id: int,
+        contexto: str,
+        reset: bool = False,
+        aventura: dict | None = None,
+    ):
         agora = datetime.now(timezone.utc).isoformat()
         placeholder = "%s" if self.backend == "postgres" else "?"
+        aventura_json = json.dumps(aventura, ensure_ascii=False) if aventura else ""
         with self._conn() as conn:
             conn.execute(f"""
-                INSERT INTO sessoes (chat_id, contexto, criada_em, atualizada_em)
-                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})
+                INSERT INTO sessoes
+                    (chat_id, contexto, aventura_json, criada_em, atualizada_em)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})
                 ON CONFLICT(chat_id) DO UPDATE SET
                     contexto=excluded.contexto,
+                    aventura_json=excluded.aventura_json,
                     criada_em=excluded.criada_em,
                     atualizada_em=excluded.atualizada_em
-            """, (chat_id, contexto, agora, agora))
-            # Limpa personagens e ações da sessão anterior
-            conn.execute(
-                f"DELETE FROM personagens WHERE chat_id={placeholder}", (chat_id,)
-            )
-            conn.execute(f"DELETE FROM acoes WHERE chat_id={placeholder}", (chat_id,))
+            """, (chat_id, contexto, aventura_json, agora, agora))
+            # A criação da sessão não apaga jogadores por padrão. O reset explícito
+            # é reservado para iniciar uma campanha nova e evita que um segundo
+            # jogador apague os personagens dos demais.
+            if reset:
+                conn.execute(
+                    f"DELETE FROM personagens WHERE chat_id={placeholder}", (chat_id,)
+                )
+                conn.execute(f"DELETE FROM acoes WHERE chat_id={placeholder}", (chat_id,))
 
     def obter_sessao(self, chat_id: int) -> dict | None:
         with self._conn() as conn:
@@ -121,37 +147,68 @@ class Database:
                 f"SELECT * FROM sessoes WHERE chat_id={'%s' if self.backend == 'postgres' else '?'}",
                 (chat_id,),
             ).fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            session = dict(row)
+            raw_adventure = session.get("aventura_json") or ""
+            if raw_adventure:
+                try:
+                    session["aventura"] = json.loads(raw_adventure)
+                except json.JSONDecodeError:
+                    session["aventura"] = None
+            else:
+                session["aventura"] = None
+            return session
 
-    def atualizar_contexto(self, chat_id: int, novo_contexto: str):
+    def atualizar_aventura(self, chat_id: int, aventura: dict) -> bool:
+        """Persiste o snapshot estruturado sem substituir o contexto narrativo."""
+        p = "%s" if self.backend == "postgres" else "?"
+        payload = json.dumps(aventura, ensure_ascii=False)
+        with self._conn() as conn:
+            cur = conn.execute(
+                f"UPDATE sessoes SET aventura_json={p}, atualizada_em={p} WHERE chat_id={p}",
+                (payload, datetime.now(timezone.utc).isoformat(), chat_id),
+            )
+            return cur.rowcount == 1
+
+    def atualizar_contexto(self, chat_id: int, novo_contexto: str, contexto_anterior: str | None = None) -> bool:
         with self._conn() as conn:
             p = "%s" if self.backend == "postgres" else "?"
-            conn.execute(f"""
-                UPDATE sessoes SET contexto={p}, atualizada_em={p}
-                WHERE chat_id={p}
-            """, (novo_contexto, datetime.now(timezone.utc).isoformat(), chat_id))
+            if contexto_anterior is None:
+                cur = conn.execute(f"""
+                    UPDATE sessoes SET contexto={p}, atualizada_em={p}
+                    WHERE chat_id={p}
+                """, (novo_contexto, datetime.now(timezone.utc).isoformat(), chat_id))
+            else:
+                # Compare-and-set: impede que uma ação concorrente sobrescreva
+                # silenciosamente o contexto produzido por outra ação.
+                cur = conn.execute(f"""
+                    UPDATE sessoes SET contexto={p}, atualizada_em={p}
+                    WHERE chat_id={p} AND contexto={p}
+                """, (novo_contexto, datetime.now(timezone.utc).isoformat(), chat_id, contexto_anterior))
+            return cur.rowcount == 1
 
     # ── Personagens ──────────────────────────────────────────────────────────
 
     def salvar_personagem(
         self, user_id: int, chat_id: int,
         nome: str, classe: str, raca: str,
-        atributos: dict, historia: str
+        atributos: dict, historia: str, detalhes: str = ""
     ):
         with self._conn() as conn:
             p = "%s" if self.backend == "postgres" else "?"
             conn.execute(f"""
                 INSERT INTO personagens
-                    (user_id, chat_id, nome, classe, raca, atributos, historia, criado_em)
-                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    (user_id, chat_id, nome, classe, raca, atributos, historia, detalhes, criado_em)
+                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
                 ON CONFLICT(user_id, chat_id) DO UPDATE SET
                     nome=excluded.nome, classe=excluded.classe,
                     raca=excluded.raca, atributos=excluded.atributos,
-                    historia=excluded.historia
+                    historia=excluded.historia, detalhes=excluded.detalhes
             """, (
                 user_id, chat_id, nome, classe, raca,
                 json.dumps(atributos, ensure_ascii=False),
-                historia, datetime.now(timezone.utc).isoformat()
+                historia, detalhes[:4000], datetime.now(timezone.utc).isoformat()
             ))
 
     def obter_personagem(self, user_id: int, chat_id: int) -> dict | None:
