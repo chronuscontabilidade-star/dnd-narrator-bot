@@ -13,6 +13,7 @@ from telegram.request import HTTPXRequest
 from database import Database
 from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
 from narrator import Narrator
+from game.adventure import AdventureState
 
 load_dotenv()
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
@@ -340,6 +341,45 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     sessao_atual = db.obter_sessao(chat_id) or sessao
     historico = db.historico_recente(chat_id, limite=10)
     resultado = await narrator.narrar_acao_com_dado(sessao_atual, p, jogadores, acao, teste, historico)
+    # Atualiza também o estado estruturado quando a ação produzir um fato de mundo.
+    aventura_atual = sessao_atual.get("aventura")
+    if aventura_atual:
+        try:
+            estado = AdventureState.from_dict(aventura_atual)
+            normalizada = acao.lower()
+            progresso = estado.data["progresso"]
+            local_atual = progresso.get("local_atual")
+            if any(verbo in normalizada for verbo in ("entrar ", "ir para ", "ir até ", "seguir para ", "voltar para ")):
+                candidatos = []
+                for local in estado.data["locais"]:
+                    nome_local = local.get("nome", "").lower()
+                    if nome_local and nome_local in normalizada:
+                        candidatos.append(local)
+                if candidatos:
+                    destino = candidatos[0]
+                    conexoes = next((l.get("conexoes", []) for l in estado.data["locais"] if l.get("id") == local_atual), [])
+                    if destino.get("id") == local_atual or destino.get("id") in conexoes or destino.get("descoberto"):
+                        estado = estado.update_progress(
+                            current_location=destino["id"],
+                            discovered_location=destino["id"],
+                            visited_location=destino["id"],
+                            event={"tipo": "movimento", "descricao": f"{p['nome']} foi para {destino.get('nome')}."},
+                        )
+            elif any(palavra in normalizada for palavra in ("procurar", "buscar", "investigar", "inspecionar", "analisar")):
+                if not teste or teste.get("sucesso"):
+                    locais = estado.data["locais"]
+                    atual = next((l for l in locais if l.get("id") == local_atual), None)
+                    conexoes = (atual or {}).get("conexoes", [])
+                    alvo = next((l for l in locais if l.get("id") in conexoes and not l.get("descoberto")), None)
+                    if alvo:
+                        estado = estado.update_progress(
+                            discovered_location=alvo["id"],
+                            event={"tipo": "descoberta", "descricao": f"{p['nome']} descobriu {alvo.get('nome')}."},
+                        )
+            db.atualizar_aventura(chat_id, estado.to_dict())
+        except (ValueError, TypeError, KeyError) as exc:
+            log.warning("Não foi possível atualizar AdventureState: %s", exc)
+
     novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
 
     # Se a IA devolver exatamente o mesmo contexto, força uma progressão mínima.
