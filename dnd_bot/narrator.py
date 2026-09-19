@@ -118,41 +118,15 @@ class Narrator:
         return templates[seed]
 
     def _offline_personagem(self, nome: str, classe: str, raca: str, detalhes: str = "") -> dict:
-        racas_bonus = {
-            "Humano": {"Força": 1, "Destreza": 1, "Constituição": 1, "Inteligência": 1, "Sabedoria": 1, "Carisma": 1},
-            "Elfo": {"Destreza": 2, "Inteligência": 1},
-            "Anão": {"Constituição": 2, "Sabedoria": 1},
-            "Halfling": {"Destreza": 2, "Carisma": 1},
-            "Tiefling": {"Inteligência": 1, "Carisma": 2},
-            "Meio-Orc": {"Força": 2, "Constituição": 1},
-        }
-        base = {"Força": 12, "Destreza": 12, "Constituição": 12, "Inteligência": 12, "Sabedoria": 12, "Carisma": 12}
-        for attr, bonus in racas_bonus.get(raca, {}).items():
-            base[attr] = base.get(attr, 10) + bonus
-        if classe == "Guerreiro":
-            base["Força"] += 2
-            base["Constituição"] += 1
-        elif classe == "Bárbaro":
-            base["Força"] += 3
-            base["Constituição"] += 1
-        elif classe == "Ladino":
-            base["Destreza"] += 2
-            base["Inteligência"] += 1
-        elif classe == "Mago":
-            base["Inteligência"] += 3
-            base["Destreza"] += 1
-        elif classe == "Clérigo":
-            base["Sabedoria"] += 2
-            base["Constituição"] += 1
-        elif classe == "Ranger":
-            base["Destreza"] += 2
-            base["Sabedoria"] += 1
+        from .game.character_creation import gerar_atributos
 
+        atributos = gerar_atributos(classe, raca)
         hist = f"{nome} é um {classe.lower()} de {raca.lower()} que nasceu para seguir em direção ao desconhecido."
         if detalhes and detalhes.strip().lower() not in {"nenhum", "nenhuma", "n/a", "nao", "não"}:
-            hist = hist + f" Seus detalhes pessoais incluem: {detalhes.strip()}"
+            hist += f" Seus detalhes pessoais incluem: {detalhes.strip()}"
         hist += " No momento, o personagem busca um propósito claro e enfrenta o mundo com coragem, disciplina e curiosidade."
-        return {"atributos": base, "historia": hist}
+        return {"atributos": atributos, "historia": hist}
+
 
     def _offline_sugestoes(self, sessao: dict, personagem: dict) -> list:
         contexto = (sessao or {}).get("contexto", "")
@@ -313,17 +287,25 @@ class Narrator:
 
     async def criar_personagem(self, nome: str, classe: str, raca: str, detalhes: str = "") -> dict:
         prompt = (
-            "Crie uma ficha de personagem de D&D 5e em JSON com chaves 'atributos' e 'historia'. "
-            "Use valores entre 8 e 18. Mantenha fidelidade à raça, classe e ao conceito fornecido. "
+            "Crie somente a história de um personagem de D&D 5e 2014 em JSON com a chave 'historia'. "
+            "Os atributos NÃO são definidos pela IA. Eles serão gerados separadamente pelo motor de regras "
+            "usando 4d6, descartando o menor, seis vezes, e os bônus raciais oficiais. "
+            "Não invente valores de atributos, bônus de classe ou regras fora de D&D 5e 2014. "
             "A história deve parecer escrita especificamente para esse personagem: conecte raça, classe, "
             "profissão, arquétipo, manias, medos, objetivos e demais detalhes fornecidos. "
-            "Não contradiga os detalhes do jogador e não invente uma raça ou classe diferente. "
-            f"Nome: {nome}. Raça: {raca}. Classe: {classe}. Conceito e detalhes do jogador: {detalhes or 'nenhum'}."
+            "Não contradiga os detalhes do jogador e não invente raça ou classe diferente. "
+            f"Nome: {nome}. Raça: {raca}. Classe: {classe}. Conceito e detalhes: {detalhes or 'nenhum'}."
         )
         try:
             data = await self._request_json(prompt)
             if isinstance(data, dict):
-                return self._validar_ficha(data)
+                historia = str(data.get("historia") or "").strip()
+                if historia:
+                    from .game.character_creation import gerar_atributos
+                    return {
+                        "atributos": gerar_atributos(classe, raca),
+                        "historia": historia[:4000],
+                    }
         except Exception as exc:
             log.warning("IA indisponível para criar personagem; usando fallback offline: %s", exc)
         return self._offline_personagem(nome, classe, raca, detalhes)
