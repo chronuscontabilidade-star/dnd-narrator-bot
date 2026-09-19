@@ -175,7 +175,7 @@ class Narrator:
         return self._parse_json(text)
 
     def _call_openai_compatible_json(self, base_url: str, api_key: str, model: str, prompt: str, provider: str):
-        if not base_url or not api_key or not model:
+        if not base_url or not model:
             raise RuntimeError(f"{provider} não configurado")
         url = base_url if base_url.endswith("/chat/completions") else f"{base_url.rstrip('/')}/chat/completions"
         payload = {
@@ -186,10 +186,9 @@ class Narrator:
             ],
             "temperature": 0.8,
         }
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=30) as response:
@@ -210,11 +209,11 @@ class Narrator:
 
     async def _request_json(self, prompt: str):
         providers = []
-        if self.api_key and genai is not None and self.model:
+        if self.api_key and genai is not None and self.model and self._provider_available("gemini"):
             providers.append(("gemini", lambda: self._call_gemini_json(prompt)))
         if self.alt_api_key and self.alt_base_url and self.alt_model and self._provider_available("alternative"):
             providers.append(("alternative", lambda: self._call_openai_compatible_json(self.alt_base_url, self.alt_api_key, self.alt_model, prompt, "alternative")))
-        if self.bastiao_api_key and self.bastiao_base_url and self.bastiao_model and self._provider_available("bastiao"):
+        if self.bastiao_base_url and self.bastiao_model and self._provider_available("bastiao"):
             providers.append(("bastiao", lambda: self._call_openai_compatible_json(self.bastiao_base_url, self.bastiao_api_key, self.bastiao_model, prompt, "bastiao")))
 
         if not providers:
