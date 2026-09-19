@@ -65,6 +65,7 @@ class Database:
                     raca        TEXT    NOT NULL,
                     atributos   TEXT    NOT NULL,  -- JSON
                     historia    TEXT    NOT NULL,
+                    detalhes    TEXT    NOT NULL DEFAULT '',
                     criado_em   TEXT    NOT NULL,
                     UNIQUE(user_id, chat_id)
                 );
@@ -94,6 +95,14 @@ class Database:
                         conn.execute(statement)
             else:
                 conn.executescript(schema)
+
+            # Migração incremental para bancos criados antes do campo detalhes.
+            if self.backend == "postgres":
+                conn.execute("ALTER TABLE personagens ADD COLUMN IF NOT EXISTS detalhes TEXT NOT NULL DEFAULT ''")
+            else:
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(personagens)").fetchall()}
+                if "detalhes" not in columns:
+                    conn.execute("ALTER TABLE personagens ADD COLUMN detalhes TEXT NOT NULL DEFAULT ''")
 
     # ── Sessões ──────────────────────────────────────────────────────────────
 
@@ -148,22 +157,22 @@ class Database:
     def salvar_personagem(
         self, user_id: int, chat_id: int,
         nome: str, classe: str, raca: str,
-        atributos: dict, historia: str
+        atributos: dict, historia: str, detalhes: str = ""
     ):
         with self._conn() as conn:
             p = "%s" if self.backend == "postgres" else "?"
             conn.execute(f"""
                 INSERT INTO personagens
-                    (user_id, chat_id, nome, classe, raca, atributos, historia, criado_em)
-                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    (user_id, chat_id, nome, classe, raca, atributos, historia, detalhes, criado_em)
+                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
                 ON CONFLICT(user_id, chat_id) DO UPDATE SET
                     nome=excluded.nome, classe=excluded.classe,
                     raca=excluded.raca, atributos=excluded.atributos,
-                    historia=excluded.historia
+                    historia=excluded.historia, detalhes=excluded.detalhes
             """, (
                 user_id, chat_id, nome, classe, raca,
                 json.dumps(atributos, ensure_ascii=False),
-                historia, datetime.now(timezone.utc).isoformat()
+                historia, detalhes[:4000], datetime.now(timezone.utc).isoformat()
             ))
 
     def obter_personagem(self, user_id: int, chat_id: int) -> dict | None:
