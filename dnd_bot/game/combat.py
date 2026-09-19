@@ -299,8 +299,8 @@ class CombatState:
             raise ValueError("O alvo está fora do alcance corpo a corpo.")
 
         attack_roll = roll_d20(
-            advantage=advantage or state.dodge_active and False,
-            disadvantage=disadvantage,
+            advantage=advantage,
+            disadvantage=disadvantage or self._state_for(target).dodge_active,
             rng=rng,
         )
         natural = attack_roll.natural
