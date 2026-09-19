@@ -13,7 +13,10 @@ from telegram.request import HTTPXRequest
 from database import Database
 from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
 from narrator import Narrator
-from game.adventure import AdventureState
+try:
+    from .game.adventure import AdventureState
+except ImportError:
+    from game.adventure import AdventureState
 
 load_dotenv()
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
