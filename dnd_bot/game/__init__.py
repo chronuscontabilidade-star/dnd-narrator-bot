@@ -4,6 +4,7 @@ A IA pode interpretar e narrar ações, mas as regras mecânicas devem ser
 resolvidas por este pacote.
 """
 
+from .action import ActionIntent, ActionResolver, SKILLS
 from .adventure import AdventureState
 from .character import Character
 from .combat import (
@@ -25,6 +26,8 @@ from .rules import (
 )
 
 __all__ = [
+    "ActionIntent",
+    "ActionResolver",
     "ActionType",
     "AdventureState",
     "AttackResult",
@@ -42,4 +45,5 @@ __all__ = [
     "roll",
     "roll_d20",
     "saving_throw",
+    "SKILLS",
 ]
