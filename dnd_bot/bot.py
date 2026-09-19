@@ -307,7 +307,39 @@ async def cancelar_entrada(update, ctx):
     await update.message.reply_text("❌ Criação cancelada.", reply_markup=ReplyKeyboardRemove())
 
 async def cmd_iniciar_historia(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ℹ️ O fluxo atual é automático: depois dos detalhes, a ficha e a aventura são iniciadas.")
+    """Inicia/repara a aventura para um personagem já criado."""
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    personagem = db.obter_personagem(user_id, chat_id)
+    if not personagem:
+        await update.message.reply_text("❌ Crie seu personagem primeiro com /start.")
+        return
+
+    sessao = db.obter_sessao(chat_id)
+    if sessao and sessao.get("aventura"):
+        aventura = sessao["aventura"]
+        titulo = aventura.get("aventura", {}).get("titulo", "Campanha em andamento")
+        await update.message.reply_text(
+            f"📚 A aventura já está ativa: {titulo}\n\nUse /acao para jogar."
+        )
+        return
+
+    try:
+        await update.message.reply_text("📚 Gerando a aventura...")
+        intro = await narrator.iniciar_aventura(chat_id)
+        db.criar_sessao(chat_id, intro["contexto"], aventura=intro)
+        await enviar_texto_seguro(
+            update,
+            f"📚 {intro['titulo']}\n\n{intro['narrativa']}",
+        )
+        await update.message.reply_text(
+            "🎲 A aventura começou. Use /acao seguido do que seu personagem faz."
+        )
+    except Exception:
+        log.exception("Falha ao iniciar aventura manualmente")
+        await update.message.reply_text(
+            "⚠️ Não consegui iniciar a aventura agora. Tente novamente em alguns segundos."
+        )
 
 async def cmd_nova_aventura(update, ctx):
     chat_id = update.effective_chat.id
