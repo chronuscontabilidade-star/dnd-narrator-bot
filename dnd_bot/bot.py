@@ -14,8 +14,10 @@ from database import Database
 from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
 from narrator import Narrator
 try:
+    from .game.action import ActionResolver
     from .game.adventure import AdventureState
 except ImportError:
+    from game.action import ActionResolver
     from game.adventure import AdventureState
 
 load_dotenv()
@@ -276,13 +278,13 @@ async def cmd_nova_aventura(update, ctx):
     )
 
 
-# ─── /acao — CORRIGIDO: dados conectados ao fluxo ────────────────────────────
+# ─── /acao — intenção determinística + narrativa ─────────────────────────────
 
 async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
-    sessao  = db.obter_sessao(chat_id)
-    p       = db.obter_personagem(user_id, chat_id)
+    sessao = db.obter_sessao(chat_id)
+    p = db.obter_personagem(user_id, chat_id)
 
     if not sessao or not p:
         await update.message.reply_text("❌ Inicie a história com /start e /iniciar_historia.")
@@ -291,121 +293,106 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     acao = " ".join(ctx.args).strip() if ctx.args else ""
     if not acao:
         await update.message.reply_text(
-            "Use `/acao` seguido da descrição\\.\n"
-            "Ex: `/acao Tento roubar o cálice sem ninguém ver`",
-            parse_mode="MarkdownV2"
+            "Use /acao seguido da descrição.\n"
+            "Ex: /acao Tento roubar o cálice sem ninguém ver"
         )
         return
 
-    jogadores = db.listar_jogadores(chat_id)
+    aventura_atual = sessao.get("aventura") or {}
+    intent = ActionResolver(aventura_atual).resolve(acao)
 
-    # Passo 1 — Gemini avalia se precisa de teste e qual CD
-    msg = await update.message.reply_text("🧠 O Mestre avalia sua ação...")
-    avaliacao = await narrator.avaliar_acao(sessao, acao)
-
-    # Passo 2 — Rola o dado se necessário e exibe visualmente
+    # O resolver define a natureza da ação. O narrador não pode transformar
+    # uma ação rotineira em rolagem arbitrariamente.
     teste = None
-    if avaliacao.get("precisa_teste"):
-        atributo = detectar_atributo(acao) or avaliacao.get("atributo", "Destreza")
-        # Garante que atributo existe na ficha (fallback seguro)
-        if atributo not in p["atributos"]:
+    if intent.requer_teste:
+        atributo = intent.atributo
+        if atributo and atributo not in p["atributos"]:
             atributo = "Destreza"
-        try:
-            cd = int(avaliacao.get("cd", 12))
-        except (TypeError, ValueError):
-            cd = 12
-        cd = max(1, min(cd, 30))
-        teste = realizar_teste(p["atributos"], atributo, dificuldade=cd)
-        try:
-            await ctx.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=msg.message_id,
-                text=formatar_resultado_dado(teste, p["nome"]),
-                parse_mode="MarkdownV2"
-            )
-        except Exception:
+
+        # Ataques e ferramentas ficam para os próximos blocos do engine.
+        # Aqui executamos somente testes baseados em atributos existentes.
+        if atributo:
+            cd = max(1, min(int(intent.cd or 12), 30))
+            teste = realizar_teste(p["atributos"], atributo, dificuldade=cd)
             await update.message.reply_text(
                 formatar_resultado_dado(teste, p["nome"]), parse_mode="MarkdownV2"
             )
-        await asyncio.sleep(1.5)  # pausa dramática
-        await update.message.reply_text("📖 O narrador descreve o que acontece...")
-    else:
-        try:
-            await ctx.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=msg.message_id,
-                text="📖 Ação simples — o narrador descreve..."
-            )
-        except Exception:
-            pass
 
-    # Passo 3 — O narrador descreve o resultado real da ação.
-    # Importante: uma falha do provedor de IA não pode colocar o jogo em loop.
+    await update.message.reply_text("📖 O narrador descreve o que acontece...")
+
+    jogadores = db.listar_jogadores(chat_id)
     sessao_atual = db.obter_sessao(chat_id) or sessao
     historico = db.historico_recente(chat_id, limite=10)
-    resultado = await narrator.narrar_acao_com_dado(sessao_atual, p, jogadores, acao, teste, historico)
-    # Atualiza também o estado estruturado quando a ação produzir um fato de mundo.
-    aventura_atual = sessao_atual.get("aventura")
-    if aventura_atual:
-        try:
-            estado = AdventureState.from_dict(aventura_atual)
-            normalizada = acao.lower()
-            progresso = estado.data["progresso"]
-            local_atual = progresso.get("local_atual")
-            if any(verbo in normalizada for verbo in ("entrar ", "ir para ", "ir até ", "seguir para ", "voltar para ")):
-                candidatos = []
-                for local in estado.data["locais"]:
-                    nome_local = local.get("nome", "").lower()
-                    if nome_local and nome_local in normalizada:
-                        candidatos.append(local)
-                if candidatos:
-                    destino = candidatos[0]
-                    conexoes = next((l.get("conexoes", []) for l in estado.data["locais"] if l.get("id") == local_atual), [])
-                    if destino.get("id") == local_atual or destino.get("id") in conexoes or destino.get("descoberto"):
-                        estado = estado.update_progress(
-                            current_location=destino["id"],
-                            discovered_location=destino["id"],
-                            visited_location=destino["id"],
-                            event={"tipo": "movimento", "descricao": f"{p['nome']} foi para {destino.get('nome')}."},
-                        )
-            elif any(palavra in normalizada for palavra in ("procurar", "buscar", "investigar", "inspecionar", "analisar")):
-                if not teste or teste.get("sucesso"):
-                    locais = estado.data["locais"]
-                    atual = next((l for l in locais if l.get("id") == local_atual), None)
-                    conexoes = (atual or {}).get("conexoes", [])
-                    alvo = next((l for l in locais if l.get("id") in conexoes and not l.get("descoberto")), None)
-                    if alvo:
-                        estado = estado.update_progress(
-                            discovered_location=alvo["id"],
-                            event={"tipo": "descoberta", "descricao": f"{p['nome']} descobriu {alvo.get('nome')}."},
-                        )
-            db.atualizar_aventura(chat_id, estado.to_dict())
-        except (ValueError, TypeError, KeyError) as exc:
-            log.warning("Não foi possível atualizar AdventureState: %s", exc)
+
+    resultado = await narrator.narrar_acao_com_dado(
+        sessao_atual, p, jogadores, acao, teste, historico
+    )
+
+    # Atualiza somente fatos que o motor conseguiu validar.
+    try:
+        estado = AdventureState.from_dict(sessao_atual.get("aventura") or aventura_atual)
+        progresso = estado.data["progresso"]
+        local_atual = progresso.get("local_atual")
+
+        if intent.tipo == "movimento" and intent.destino:
+            locais = estado.data.get("locais", [])
+            destino = next((l for l in locais if l.get("id") == intent.destino), None)
+            atual = next((l for l in locais if l.get("id") == local_atual), None)
+            conexoes = (atual or {}).get("conexoes", [])
+            if destino and (
+                destino.get("id") == local_atual
+                or destino.get("id") in conexoes
+                or destino.get("descoberto")
+            ):
+                estado = estado.update_progress(
+                    current_location=destino["id"],
+                    discovered_location=destino["id"],
+                    visited_location=destino["id"],
+                    event={
+                        "tipo": "movimento",
+                        "descricao": f"{p['nome']} foi para {destino.get('nome')}.",
+                    },
+                )
+
+        elif intent.tipo in {"investigacao", "percepcao"} and (
+            not teste or teste.get("sucesso")
+        ):
+            locais = estado.data.get("locais", [])
+            atual = next((l for l in locais if l.get("id") == local_atual), None)
+            conexoes = (atual or {}).get("conexoes", [])
+            alvo = next(
+                (l for l in locais if l.get("id") in conexoes and not l.get("descoberto")),
+                None,
+            )
+            if alvo:
+                estado = estado.update_progress(
+                    discovered_location=alvo["id"],
+                    event={
+                        "tipo": "descoberta",
+                        "descricao": f"{p['nome']} descobriu {alvo.get('nome')}.",
+                    },
+                )
+
+        db.atualizar_aventura(chat_id, estado.to_dict())
+    except (ValueError, TypeError, KeyError) as exc:
+        log.warning("Não foi possível atualizar AdventureState: %s", exc)
 
     novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
-
-    # Se a IA devolver exatamente o mesmo contexto, força uma progressão mínima.
     if novo_ctx.strip() == sessao_atual["contexto"].strip():
-        status = "sucesso" if teste and teste.get("sucesso") else "resultado narrativo"
+        status = (
+            "sucesso" if teste and teste.get("sucesso")
+            else "falha" if teste else "resultado narrativo"
+        )
         novo_ctx = (
             f"{sessao_atual['contexto']}\n"
             f"Evento: {p['nome']} realizou '{acao}'. Resultado: {status}."
         )
 
-    atualizado = db.atualizar_contexto(
+    db.atualizar_contexto(
         chat_id,
         novo_ctx,
         contexto_anterior=sessao_atual["contexto"],
     )
-
-    if not atualizado:
-        # Outro jogador avançou a cena enquanto esta ação era processada.
-        # Não rode a IA novamente: isso duplicava a mesma ação quando o provider falhava.
-        sessao_pos_concorrencia = db.obter_sessao(chat_id)
-        if sessao_pos_concorrencia:
-            log.info("Contexto mudou durante /acao de %s; evitando nova narração duplicada.", user_id)
-
     db.registrar_acao(user_id, chat_id, acao, resultado["narrativa"])
 
     sugestoes_txt = formatar_sugestoes(resultado.get("sugestoes", []))
