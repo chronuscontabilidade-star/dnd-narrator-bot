@@ -219,26 +219,68 @@ async def finalizar_personagem(update, ctx, estado):
         if not ficha.get("historia"):
             raise ValueError("ficha incompleta")
         chat_id = update.effective_chat.id
+
+        # Primeiro persistimos o personagem. A criação da ficha não depende
+        # da existência de uma sessão antiga ou de uma aventura anterior.
+        db.salvar_personagem(
+            update.effective_user.id,
+            chat_id,
+            p["nome"],
+            p["classe"],
+            p["raca"],
+            atributos,
+            ficha["historia"],
+            p.get("detalhes", ""),
+        )
+
+        # Uma sessão só conta como campanha existente se tiver AdventureState
+        # válido. Sessões antigas/incompletas não podem bloquear o início.
         sessao_existente = db.obter_sessao(chat_id)
-        if sessao_existente:
-            intro = {"titulo": "Campanha em andamento", "narrativa": "Você entrou na campanha existente. O Mestre mantém o estado atual da aventura.", "contexto": sessao_existente["contexto"]}
+        aventura_existente = sessao_existente.get("aventura") if sessao_existente else None
+        if aventura_existente:
+            intro = {
+                "titulo": aventura_existente.get("aventura", {}).get("titulo", "Campanha em andamento"),
+                "narrativa": (
+                    "Você entra na aventura já em andamento. "
+                    "O Mestre mantém o mundo e o progresso atuais."
+                ),
+                "contexto": sessao_existente["contexto"],
+            }
         else:
+            await update.message.reply_text("📚 Criando uma nova aventura para o grupo...")
             intro = await narrator.iniciar_aventura(chat_id)
             db.criar_sessao(chat_id, intro["contexto"], aventura=intro)
-        db.salvar_personagem(update.effective_user.id, chat_id, p["nome"], p["classe"], p["raca"], atributos, ficha["historia"], p.get("detalhes", ""))
+
+        estados(ctx).pop(estado_key(update), None)
+        personagem = {
+            "nome": p["nome"],
+            "raca": p["raca"],
+            "classe": p["classe"],
+            "atributos": atributos,
+            "detalhes": p.get("detalhes", ""),
+            "historia": ficha["historia"],
+        }
+        await update.message.reply_text(
+            formatar_ficha_completa(personagem),
+            reply_markup=ReplyKeyboardRemove(),
+        )
+
+        # A introdução é texto gerado pela IA. Não use Markdown aqui.
+        await enviar_texto_seguro(
+            update,
+            f"📚 {intro['titulo']}\n\n{intro['narrativa']}",
+        )
+        await update.message.reply_text(
+            "🎲 A aventura começou. Quando estiver pronto, use /acao seguido do que seu personagem faz."
+        )
+        return
     except Exception:
         log.exception("Falha ao finalizar criação do personagem")
-        await update.message.reply_text("⚠️ Não consegui finalizar a ficha agora. Seus dados continuam preservados; tente novamente.")
+        await update.message.reply_text(
+            "⚠️ Não consegui iniciar a aventura agora. A ficha foi preservada. "
+            "Use /iniciar_historia para tentar iniciar a campanha novamente."
+        )
         return
-    estados(ctx).pop(estado_key(update), None)
-    personagem = {"nome": p["nome"], "raca": p["raca"], "classe": p["classe"], "atributos": atributos, "detalhes": p.get("detalhes", ""), "historia": ficha["historia"]}
-    await update.message.reply_text(formatar_ficha_completa(personagem), reply_markup=ReplyKeyboardRemove())
-    # A introdução é texto gerado pela IA. Não use Markdown aqui: títulos,
-    # nomes e narrativa podem conter caracteres reservados e impedir o envio.
-    await enviar_texto_seguro(
-        update,
-        f"📚 {intro['titulo']}\n\n{intro['narrativa']}",
-    )
 
 async def receber_detalhes(update, ctx):
     estado = estados(ctx).get(estado_key(update))
