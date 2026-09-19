@@ -1,21 +1,32 @@
-"""Motor de combate determinístico para D&D 5e (2014).
+"""Economia de ações e turnos de combate para D&D 5e 2014.
 
-Esta camada resolve somente mecânica. Narração, Telegram e IA ficam fora dela.
+O motor mantém o estado mecânico. A camada de IA pode escolher/interpretar
+uma ação, mas não pode ignorar as regras de turno, movimento ou alvo.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 from .character import Character
 from .dice import DiceRoll, roll, roll_d20
 from .rules import ability_modifier
 
 
+class ActionType(str, Enum):
+    ATTACK = "attack"
+    DASH = "dash"
+    DODGE = "dodge"
+    DISENGAGE = "disengage"
+    HELP = "help"
+    READY = "ready"
+    SEARCH = "search"
+    END_TURN = "end_turn"
+
+
 @dataclass
 class Combatant:
-    """Participante de combate com estado mínimo independente de personagem."""
-
     name: str
     armor_class: int
     max_hp: int
@@ -26,6 +37,8 @@ class Combatant:
     damage_bonus: int = 0
     is_player: bool = False
     initiative: int | None = None
+    speed: int = 30
+    position: tuple[int, int] = (0, 0)
 
     def __post_init__(self) -> None:
         if self.armor_class < 1:
@@ -34,6 +47,8 @@ class Combatant:
             raise ValueError("HP máximo deve ser positivo.")
         if not 0 <= self.hp <= self.max_hp:
             raise ValueError("HP atual deve estar entre 0 e o HP máximo.")
+        if self.speed < 0:
+            raise ValueError("Deslocamento não pode ser negativo.")
 
     @property
     def dexterity_modifier(self) -> int:
@@ -51,12 +66,43 @@ class Combatant:
         return dealt
 
 
+@dataclass
+class TurnState:
+    """Recursos disponíveis durante o turno atual."""
+
+    movement_remaining: int
+    action_used: bool = False
+    bonus_action_used: bool = False
+    reaction_available: bool = True
+    dash_used: bool = False
+    dodge_active: bool = False
+    disengaged: bool = False
+
+    def reset(self, speed: int) -> None:
+        self.movement_remaining = speed
+        self.action_used = False
+        self.bonus_action_used = False
+        self.reaction_available = True
+        self.dash_used = False
+        self.dodge_active = False
+        self.disengaged = False
+
+
 @dataclass(frozen=True)
 class InitiativeResult:
     combatant: str
     roll: DiceRoll
     modifier: int
     total: int
+
+
+@dataclass(frozen=True)
+class MoveResult:
+    combatant: str
+    from_position: tuple[int, int]
+    to_position: tuple[int, int]
+    distance: int
+    remaining_movement: int
 
 
 @dataclass(frozen=True)
@@ -80,32 +126,48 @@ class CombatState:
     turn_index: int = 0
     round: int = 1
     started: bool = False
+    turn_states: dict[str, TurnState] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if not self.combatants:
-            raise ValueError("Um combate precisa de pelo menos dois combatentes.")
         if len(self.combatants) < 2:
             raise ValueError("Um combate precisa de pelo menos dois combatentes.")
 
     @property
     def current(self) -> Combatant:
-        alive = [c for c in self.combatants if c.is_alive]
-        if not alive:
-            raise RuntimeError("O combate terminou.")
         if not self.started:
             raise RuntimeError("O combate ainda não foi iniciado.")
+        if self.finished:
+            raise RuntimeError("O combate terminou.")
         current = self.combatants[self.turn_index]
         if not current.is_alive:
-            self.advance_turn()
-            return self.current
+            return self.advance_turn()
         return current
 
     @property
+    def current_turn(self) -> TurnState:
+        current = self.current
+        return self.turn_states[current.name]
+
+    @property
     def finished(self) -> bool:
-        return len({c.is_player for c in self.combatants if c.is_alive}) <= 1
+        alive_sides = {c.is_player for c in self.combatants if c.is_alive}
+        return len(alive_sides) <= 1
+
+    def _require_current(self, combatant: Combatant) -> None:
+        if not self.started:
+            raise RuntimeError("O combate ainda não foi iniciado.")
+        if combatant is not self.current:
+            raise ValueError("Não é o turno desse combatente.")
+        if not combatant.is_alive:
+            raise ValueError("Esse combatente está fora de combate.")
+
+    def _state_for(self, combatant: Combatant) -> TurnState:
+        try:
+            return self.turn_states[combatant.name]
+        except KeyError as exc:
+            raise RuntimeError("Estado de turno não encontrado.") from exc
 
     def start(self, rng=None) -> list[InitiativeResult]:
-        """Rola iniciativa e ordena o combate por maior resultado."""
         results = []
         for combatant in self.combatants:
             roll_result = roll_d20(rng=rng)
@@ -120,9 +182,6 @@ class CombatState:
                 )
             )
 
-        # Empate: maior modificador de Destreza primeiro; persistindo empate,
-        # ordem original. Isso mantém a resolução determinística sem depender
-        # de aleatoriedade adicional.
         original_order = {id(c): i for i, c in enumerate(self.combatants)}
         self.combatants.sort(
             key=lambda c: (
@@ -135,6 +194,9 @@ class CombatState:
         self.turn_index = 0
         self.round = 1
         self.started = True
+        self.turn_states = {
+            c.name: TurnState(c.speed) for c in self.combatants
+        }
         return results
 
     def advance_turn(self) -> Combatant:
@@ -148,11 +210,70 @@ class CombatState:
             self.turn_index = (self.turn_index + 1) % len(self.combatants)
             if self.turn_index == 0:
                 self.round += 1
-            if self.combatants[self.turn_index].is_alive:
-                return self.combatants[self.turn_index]
+            candidate = self.combatants[self.turn_index]
+            if candidate.is_alive:
+                self.turn_states[candidate.name].reset(candidate.speed)
+                return candidate
             attempts += 1
 
         raise RuntimeError("Nenhum combatente vivo pode jogar.")
+
+    @staticmethod
+    def _grid_distance(origin: tuple[int, int], target: tuple[int, int]) -> int:
+        """Distância em pés usando o deslocamento de grade de 5 pés."""
+        dx = abs(target[0] - origin[0])
+        dy = abs(target[1] - origin[1])
+        return max(dx, dy) * 5
+
+    def move_to(self, combatant: Combatant, position: tuple[int, int]) -> MoveResult:
+        """Move o combatente dentro do deslocamento restante do turno."""
+        self._require_current(combatant)
+        state = self._state_for(combatant)
+        distance = self._grid_distance(combatant.position, position)
+        if distance > state.movement_remaining:
+            raise ValueError("Movimento excede o deslocamento restante.")
+
+        old_position = combatant.position
+        combatant.position = position
+        state.movement_remaining -= distance
+        return MoveResult(
+            combatant=combatant.name,
+            from_position=old_position,
+            to_position=position,
+            distance=distance,
+            remaining_movement=state.movement_remaining,
+        )
+
+    def dash(self, combatant: Combatant) -> int:
+        """Ação Dash: acrescenta deslocamento igual ao Speed."""
+        self._require_current(combatant)
+        state = self._state_for(combatant)
+        if state.action_used:
+            raise ValueError("Ação já utilizada neste turno.")
+        state.action_used = True
+        state.dash_used = True
+        state.movement_remaining += combatant.speed
+        return state.movement_remaining
+
+    def dodge(self, combatant: Combatant) -> None:
+        self._require_current(combatant)
+        state = self._state_for(combatant)
+        if state.action_used:
+            raise ValueError("Ação já utilizada neste turno.")
+        state.action_used = True
+        state.dodge_active = True
+
+    def disengage(self, combatant: Combatant) -> None:
+        self._require_current(combatant)
+        state = self._state_for(combatant)
+        if state.action_used:
+            raise ValueError("Ação já utilizada neste turno.")
+        state.action_used = True
+        state.disengaged = True
+
+    def end_turn(self, combatant: Combatant) -> Combatant:
+        self._require_current(combatant)
+        return self.advance_turn()
 
     def attack(
         self,
@@ -163,14 +284,22 @@ class CombatState:
         disadvantage: bool = False,
         rng=None,
     ) -> AttackResult:
-        """Resolve um ataque, incluindo crítico, 1 natural e dano."""
-        if not attacker.is_alive:
-            raise ValueError("Um combatente incapacitado não pode atacar.")
+        """Usa a ação Attack contra um alvo dentro do alcance corpo a corpo."""
+        self._require_current(attacker)
+        state = self._state_for(attacker)
+        if state.action_used:
+            raise ValueError("Ação já utilizada neste turno.")
         if not target.is_alive:
             raise ValueError("O alvo já está fora de combate.")
+        if target is attacker:
+            raise ValueError("Um combatente não pode atacar a si mesmo.")
+
+        distance = self._grid_distance(attacker.position, target.position)
+        if distance > 5:
+            raise ValueError("O alvo está fora do alcance corpo a corpo.")
 
         attack_roll = roll_d20(
-            advantage=advantage,
+            advantage=advantage or state.dodge_active and False,
             disadvantage=disadvantage,
             rng=rng,
         )
@@ -191,6 +320,7 @@ class CombatState:
             damage = max(0, damage_roll.total + attacker.damage_bonus)
             target.take_damage(damage)
 
+        state.action_used = True
         return AttackResult(
             attacker=attacker.name,
             target=target.name,
@@ -212,7 +342,6 @@ def roll_expression_for_damage(
     rng=None,
     critical: bool = False,
 ) -> DiceRoll:
-    """Rola dano simples; crítico dobra a quantidade de dados."""
     normalized = expression.strip().lower().replace(" ", "")
     if "d" not in normalized:
         raise ValueError(f"Dado de dano inválido: {expression!r}")
@@ -233,7 +362,6 @@ def combatant_from_character(
     damage_dice: str = "1d4",
     damage_bonus: int = 0,
 ) -> Combatant:
-    """Cria um combatente usando o estado mecânico de um personagem."""
     return Combatant(
         name=character.name,
         armor_class=character.armor_class,
