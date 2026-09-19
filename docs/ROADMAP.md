@@ -311,16 +311,18 @@ O sistema cria pressão, mas não escolhe a ação pelo jogador.
 
 ### Votação multiplayer
 
-- [ ] Criar propostas de ação.
+- [x] Criar propostas de ação.
 - [ ] Botões de votação no Telegram.
 - [ ] Janela de votação.
-- [ ] Contagem de votos.
-- [ ] Empates.
-- [ ] Jogadores que não votaram.
-- [ ] Execução da ação vencedora.
+- [x] Contagem de votos.
+- [x] Empates.
+- [x] Jogadores que não votaram.
+- [x] Execução da ação vencedora.
 - [ ] Testes individuais para participantes.
 - [ ] Narração dos resultados individuais.
-- [ ] Registrar a decisão como evento.
+- [x] Registrar a decisão como evento.
+- [x] Pipeline determinístico Decision → Vote → Resolution.
+- [x] Maioria absoluta para aprovação; empate ou ausência de maioria não executa a ação.
 
 ### Regra de ouro
 
@@ -376,7 +378,7 @@ Criar:
 - [ ] Simulação de quests.
 - [ ] Simulação de NPCs.
 - [ ] Simulação de descoberta de locais.
-- [ ] Simulação de decisões.
+- [x] Simulação de decisões.
 - [ ] Simulação de desvios dos jogadores.
 - [ ] Intervenção do Diretor de Cena.
 - [ ] Persistência durante a simulação.
