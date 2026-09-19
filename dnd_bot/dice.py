@@ -85,7 +85,8 @@ def realizar_teste(
     atributo: str,
     dificuldade: int = 12,
     vantagem: bool = False,
-    desvantagem: bool = False
+    desvantagem: bool = False,
+    criticos: bool = False,
 ) -> dict:
     """
     Realiza um teste de atributo D20 + modificador vs dificuldade (CD).
@@ -111,8 +112,10 @@ def realizar_teste(
     total = resultado_bruto + mod
 
     # Determina o resultado
-    critico_sucesso = resultado_bruto == 20
-    falha_critica  = resultado_bruto == 1
+    # Em testes de atributo, 20/1 natural não são sucesso/falha automáticos.
+    # O comportamento automático é habilitado explicitamente para regras que o exigem.
+    critico_sucesso = criticos and resultado_bruto == 20
+    falha_critica  = criticos and resultado_bruto == 1
     sucesso = critico_sucesso or (not falha_critica and total >= dificuldade)
 
     return {
