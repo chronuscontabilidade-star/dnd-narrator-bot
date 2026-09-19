@@ -18,6 +18,7 @@ from .combat import (
 )
 from .dice import DiceRoll, roll, roll_d20
 from .engine import GameEngine
+from .director import SceneDirector, SceneSuggestion
 from .rules import (
     ability_modifier,
     ability_check,
@@ -36,6 +37,9 @@ __all__ = [
     "Combatant",
     "DiceRoll",
     "GameEngine",
+    "GoalDrivenPlayerAgent",
+    "SceneDirector",
+    "SceneSuggestion",
     "InitiativeResult",
     "MoveResult",
     "TurnState",
