@@ -472,3 +472,55 @@ __all__ = [
     "SimulationResult",
     "build_vertical_slice_adventure",
 ]
+
+
+def main() -> int:
+    """Executa o vertical slice manualmente: python -m dnd_bot.game.simulator."""
+    import json
+
+    character = Character(
+        name="Simulador",
+        race="Humano",
+        class_name="Guerreiro",
+        abilities={
+            "Força": 16,
+            "Destreza": 12,
+            "Constituição": 14,
+            "Inteligência": 14,
+            "Sabedoria": 12,
+            "Carisma": 10,
+        },
+        level=1,
+        max_hp=20,
+        hp=20,
+        armor_class=15,
+    )
+    result = CampaignSimulator(rng=_CliRng()).run(
+        build_vertical_slice_adventure(),
+        character,
+        max_steps=10,
+    )
+    print(json.dumps({
+        "status": result.report.status,
+        "passed": result.report.passed,
+        "steps": result.report.steps,
+        "checks": result.report.checks,
+        "successful_checks": result.report.successful_checks,
+        "failed_checks": result.report.failed_checks,
+        "combats": result.report.combats,
+        "combat_rounds": result.report.combat_rounds,
+        "quests_completed": result.report.quests_completed,
+        "locations_discovered": result.report.locations_discovered,
+        "events": result.report.events,
+        "failures": result.report.failures,
+    }, ensure_ascii=False, indent=2))
+    return 0 if result.report.passed else 1
+
+
+class _CliRng:
+    def randint(self, low: int, high: int) -> int:
+        return 10 if high == 20 else 4
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
