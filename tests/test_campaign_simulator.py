@@ -3,6 +3,7 @@ import unittest
 from dnd_bot.game.character import Character
 from dnd_bot.game.simulator import (
     CampaignSimulator,
+    GoalDrivenPlayerAgent,
     ScriptedPlayerAgent,
     build_vertical_slice_adventure,
 )
@@ -54,6 +55,17 @@ class CampaignSimulatorTests(unittest.TestCase):
             result.state.data["encounters"][0]["status"],
             "concluido",
         )
+        self.assertGreaterEqual(len(result.report.director_levels), 1)
+        self.assertEqual(result.report.loops_detected, 0)
+
+    def test_goal_driven_agent_reads_campaign_state(self):
+        state = build_vertical_slice_adventure()
+        action = GoalDrivenPlayerAgent().choose_action(
+            state,
+            Character(name="Teste", race="Humano", class_name="Guerreiro"),
+            0,
+        )
+        self.assertIn("investigar", action.lower())
 
     def test_invalid_initial_campaign_is_reported(self):
         state = build_vertical_slice_adventure().to_dict()
