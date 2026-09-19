@@ -234,7 +234,7 @@ async def receber_detalhes(update, ctx):
     if not estado or "personagem" not in estado:
         await update.message.reply_text("⚠️ A criação expirou. Use /start novamente.")
         return
-    detalhes = update.message.text.strip()
+    if estado.get("etapa") == "gerando":\n        await update.message.reply_text("⏳ A ficha ainda está sendo gerada. Aguarde alguns segundos.")\n        return\n    detalhes = update.message.text.strip()
     estado["personagem"]["detalhes"] = "" if detalhes.lower() in {"nenhum", "nenhuma", "n/a", "nao", "não"} else detalhes[:4000]
     await finalizar_personagem(update, ctx, estado)
 
