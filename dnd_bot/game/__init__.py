@@ -5,7 +5,15 @@ resolvidas por este pacote.
 """
 
 from .character import Character
-from .combat import AttackResult, CombatState, Combatant, InitiativeResult
+from .combat import (
+    ActionType,
+    AttackResult,
+    CombatState,
+    Combatant,
+    InitiativeResult,
+    MoveResult,
+    TurnState,
+)
 from .dice import DiceRoll, roll, roll_d20
 from .engine import GameEngine
 from .rules import (
@@ -16,6 +24,7 @@ from .rules import (
 )
 
 __all__ = [
+    "ActionType",
     "AttackResult",
     "Character",
     "CombatState",
@@ -23,6 +32,8 @@ __all__ = [
     "DiceRoll",
     "GameEngine",
     "InitiativeResult",
+    "MoveResult",
+    "TurnState",
     "ability_check",
     "ability_modifier",
     "proficiency_bonus",
