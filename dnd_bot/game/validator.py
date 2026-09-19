@@ -33,7 +33,7 @@ class AdventureValidator:
         npc_ids = self._unique_ids(npcs, "npc", issues)
         encounter_ids = self._unique_ids(encounters, "encounter", issues)
         quest_ids = self._unique_ids(quests, "quest", issues)
-        self._unique_ids(items, "item", issues)
+        item_ids = self._unique_ids(items, "item", issues)
         secret_ids = self._unique_ids(secrets, "segredo", issues)
 
         current = progress.get("local_atual")
@@ -169,6 +169,134 @@ class AdventureValidator:
                 issues.append(ValidationIssue(
                     "broken_item_location",
                     f"Item {item.get('id')} está em local inexistente: {local_id}",
+                ))
+            carrier = item.get("portador")
+            if carrier is not None and carrier not in npc_ids:
+                issues.append(ValidationIssue(
+                    "broken_item_carrier",
+                    f"Item {item.get('id')} referencia portador inexistente: {carrier}",
+                ))
+
+        reachable = (
+            self._reachable_locations(locations, current)
+            if current in location_ids
+            else set()
+        )
+        encounter_locations = {
+            encounter.get("id"): encounter.get("local")
+            for encounter in encounters
+            if encounter.get("id")
+        }
+        npc_locations = {
+            npc.get("id"): npc.get("local_atual")
+            for npc in npcs
+            if npc.get("id")
+        }
+        item_locations = {
+            item.get("id"): item.get("local_atual")
+            for item in items
+            if item.get("id")
+        }
+
+        for quest in quests:
+            quest_id = quest.get("id")
+            if quest.get("status") == "concluida":
+                continue
+            pending_steps = [
+                step for step in quest.get("etapas", [])
+                if step.get("status") != "concluida"
+            ]
+            if not pending_steps:
+                issues.append(ValidationIssue(
+                    "active_quest_without_pending_steps",
+                    f"Quest {quest_id} não concluída não possui etapa pendente.",
+                ))
+                continue
+
+            first_pending = pending_steps[0]
+            target = first_pending.get("alvo")
+            legacy_location = first_pending.get("local_objetivo")
+            if target is None and legacy_location is not None:
+                target = {"tipo": "local", "id": legacy_location}
+
+            if target is None:
+                issues.append(ValidationIssue(
+                    "quest_step_without_structured_target",
+                    f"Quest {quest_id}, etapa {first_pending.get('id')} não possui alvo estruturado.",
+                    "warning",
+                ))
+                continue
+
+            if not isinstance(target, dict):
+                issues.append(ValidationIssue(
+                    "invalid_quest_target",
+                    f"Quest {quest_id}, etapa {first_pending.get('id')} possui alvo inválido.",
+                ))
+                continue
+
+            target_type = target.get("tipo")
+            target_id = target.get("id")
+            target_sets = {
+                "local": location_ids,
+                "encounter": encounter_ids,
+                "item": item_ids,
+                "npc": npc_ids,
+                "segredo": secret_ids,
+            }
+            if target_type == "flag":
+                if not target_id:
+                    issues.append(ValidationIssue(
+                        "invalid_quest_target",
+                        f"Quest {quest_id}, etapa {first_pending.get('id')} possui flag sem id.",
+                    ))
+                continue
+
+            if target_type not in target_sets or target_id not in target_sets[target_type]:
+                issues.append(ValidationIssue(
+                    "broken_quest_target",
+                    f"Quest {quest_id}, etapa {first_pending.get('id')} referencia "
+                    f"{target_type} inexistente: {target_id}",
+                ))
+                continue
+
+            target_location = None
+            if target_type == "local":
+                target_location = target_id
+            elif target_type == "encounter":
+                target_location = encounter_locations.get(target_id)
+            elif target_type == "npc":
+                target_location = npc_locations.get(target_id)
+            elif target_type == "item":
+                target_location = item_locations.get(target_id)
+                if target_location is None:
+                    carrier = next(
+                        (item.get("portador") for item in items if item.get("id") == target_id),
+                        None,
+                    )
+                    if carrier is not None:
+                        target_location = npc_locations.get(carrier)
+
+            if target_location is not None and target_location not in reachable:
+                issues.append(ValidationIssue(
+                    "quest_target_unreachable",
+                    f"Quest {quest_id}, etapa {first_pending.get('id')} tem alvo "
+                    f"inacessível a partir de {current}: {target_location}",
+                ))
+
+            if target_type == "encounter" and encounter_locations.get(target_id) is None:
+                issues.append(ValidationIssue(
+                    "quest_target_without_location",
+                    f"Encounter objetivo {target_id} não possui local.",
+                ))
+            if target_type == "item" and target_location is None:
+                issues.append(ValidationIssue(
+                    "quest_item_without_acquisition_path",
+                    f"Item objetivo {target_id} não possui local nem portador conhecido.",
+                ))
+            if target_type == "npc" and not npc_locations.get(target_id):
+                issues.append(ValidationIssue(
+                    "quest_npc_without_location",
+                    f"NPC objetivo {target_id} não possui local atual.",
                 ))
 
         for encounter_id in progress.get("encounters_concluidos", []):
