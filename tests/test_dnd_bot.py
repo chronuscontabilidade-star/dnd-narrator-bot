@@ -106,6 +106,23 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(ficha["atributos"]["Destreza"], 10)
         self.assertEqual(set(ficha["atributos"]), {"Força", "Destreza", "Constituição", "Inteligência", "Sabedoria", "Carisma"})
 
+    def test_two_players_survive_join(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(str(Path(directory) / "test.db"))
+            database.criar_sessao(1, "aventura")
+            database.salvar_personagem(10, 1, "Kira", "Ladina", "Elfa", {"Destreza": 16}, "h1")
+            database.salvar_personagem(20, 1, "Thorin", "Guerreiro", "Anão", {"Força": 16}, "h2")
+            database.criar_sessao(1, "aventura ainda ativa")
+            self.assertEqual({p["nome"] for p in database.listar_jogadores(1)}, {"Kira", "Thorin"})
+
+    def test_context_compare_and_set_rejects_stale_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(str(Path(directory) / "test.db"))
+            database.criar_sessao(1, "A")
+            self.assertTrue(database.atualizar_contexto(1, "B", contexto_anterior="A"))
+            self.assertFalse(database.atualizar_contexto(1, "C", contexto_anterior="A"))
+            self.assertEqual(database.obter_sessao(1)["contexto"], "B")
+
 
 if __name__ == "__main__":
     unittest.main()
