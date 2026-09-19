@@ -50,6 +50,50 @@ class GoalDrivenPlayerAgent:
         return "investigar a área"
 
 
+@dataclass(frozen=True)
+class PartyMember:
+    """Jogador simulado e seu personagem dentro de uma party."""
+    character: Character
+    agent: PlayerAgent
+    player_id: str | None = None
+
+
+@dataclass
+class PartySimulationResult:
+    """Resultado de uma simulação multiparticipante."""
+    state: AdventureState
+    report: SimulationReport
+    rounds: int = 0
+    decisions: int = 0
+    members: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PersonalityPlayerAgent:
+    """Agente determinístico com um perfil simples de decisão."""
+    personality: str
+
+    def choose_action(self, state: AdventureState, character: Character, step: int) -> str:
+        current_id = state.data.get("progresso", {}).get("local_atual")
+        current = next((loc for loc in state.data.get("locais", []) if loc.get("id") == current_id), None)
+        if self.personality == "social":
+            npcs = [npc for npc in state.data.get("npcs", []) if npc.get("local_atual") == current_id and npc.get("vivo", True)]
+            if npcs:
+                return f"falar com {npcs[0].get('nome')}"
+        if self.personality == "cauteloso":
+            return "observar o ambiente"
+        if self.personality == "agressivo":
+            encounters = [e for e in state.data.get("encounters", []) if e.get("local") == current_id and e.get("status") == "pendente"]
+            if encounters:
+                return "atacar o inimigo"
+        if current:
+            for connection in current.get("conexoes", []):
+                location = next((loc for loc in state.data.get("locais", []) if loc.get("id") == connection), None)
+                if location and location.get("descoberto"):
+                    return f"ir para {location.get('nome')}"
+        return "investigar a área"
+
+
 class ScriptedPlayerAgent:
     """Agente previsível para testes de regressão."""
 
@@ -173,6 +217,78 @@ class CampaignSimulator:
             state.data["progresso"].get("locais_descobertos", [])
         )
         return SimulationResult(state=state, report=report)
+
+    def run_party(
+        self,
+        adventure: AdventureState,
+        members: list[PartyMember],
+        *,
+        max_rounds: int = 20,
+        include_combat: bool = True,
+    ) -> PartySimulationResult:
+        """Simula decisões de vários jogadores sobre o mesmo estado da campanha."""
+        if not members:
+            raise ValueError("A party precisa ter pelo menos um membro.")
+        if max_rounds < 1:
+            raise ValueError("max_rounds deve ser positivo.")
+
+        state = adventure
+        report = SimulationReport(status="em_andamento")
+        decisions = 0
+        rounds = 0
+        try:
+            self._validate_initial_state(state)
+            report.events.append("campanha_validada")
+            for _round in range(max_rounds):
+                if self._quest_completed(state):
+                    break
+                rounds += 1
+                for member in members:
+                    if self._quest_completed(state):
+                        break
+                    action = member.agent.choose_action(state, member.character, decisions)
+                    if not isinstance(action, str) or not action.strip():
+                        raise ValueError(f"PlayerAgent inválido para {member.character.name}.")
+                    normalized = normalize(action)
+                    if self._is_repeated_action(report.action_history, normalized):
+                        report.loops_detected += 1
+                        if report.loops_detected >= 3:
+                            raise RuntimeError("Loop de ações detectado na party.")
+                    idle_steps = self._idle_steps(report)
+                    suggestion = self.director.evaluate(
+                        state,
+                        recent_steps=idle_steps,
+                        progress_since_last_scene=not self._has_been_idle(report),
+                    )
+                    report.director_levels.append(suggestion.level)
+                    if suggestion.level in {"suggestion", "intervention"}:
+                        report.suggestions_presented += 1
+                    before = self._state_signature(state)
+                    report.action_history.append(normalized)
+                    report.steps += 1
+                    decisions += 1
+                    report.events.append(f"jogador:{member.character.name}:acao:{normalized}")
+                    state = self._resolve_action(state, member.character, action, report)
+                    if include_combat:
+                        state = self._run_pending_encounters(state, member.character, report)
+                    after = self._state_signature(state)
+                    report.events.append("sem_progresso" if before == after else "progresso")
+            if self._quest_completed(state):
+                report.quests_completed = len(state.data["progresso"].get("quests_concluidas", []))
+                report.status = "concluida"
+            else:
+                report.status = "sem_desfecho"
+        except (ValueError, TypeError, KeyError, RuntimeError) as exc:
+            report.status = "falhou"
+            report.failures.append(str(exc))
+        report.locations_discovered = len(state.data["progresso"].get("locais_descobertos", []))
+        return PartySimulationResult(
+            state=state,
+            report=report,
+            rounds=rounds,
+            decisions=decisions,
+            members=[m.character.name for m in members],
+        )
 
     def _is_repeated_action(self, history: list[str], action: str) -> bool:
         return len(history) >= 2 and history[-1] == action and history[-2] == action
@@ -535,6 +651,9 @@ __all__ = [
     "SimulationResult",
     "build_vertical_slice_adventure",
     "GoalDrivenPlayerAgent",
+    "PartyMember",
+    "PartySimulationResult",
+    "PersonalityPlayerAgent",
 ]
 
 
