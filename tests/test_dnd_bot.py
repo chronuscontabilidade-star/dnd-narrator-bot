@@ -20,6 +20,25 @@ class NarratorTests(unittest.TestCase):
         self.assertTrue(intro["narrativa"])
         self.assertTrue(intro["contexto"])
 
+    def test_adventure_state_transitions(self):
+        raw = {
+            "schema_version": 1,
+            "aventura": {"id": "a", "titulo": "A", "resumo": "R", "status": "em_andamento"},
+            "mundo": {}, "locais": [
+                {"id": "inicio", "nome": "Inicio", "descoberto": True, "visitado": True, "conexoes": ["cripta"]},
+                {"id": "cripta", "nome": "Cripta", "descoberto": False, "visitado": False, "conexoes": []},
+            ],
+            "npcs": [], "encounters": [], "quests": [], "itens": [], "flags": {},
+            "progresso": {"local_atual": "inicio", "locais_descobertos": ["inicio"],
+                          "locais_visitados": ["inicio"], "npcs_conhecidos": [],
+                          "encounters_concluidos": [], "quests_concluidas": [], "eventos_importantes": []},
+        }
+        state = AdventureState.from_dict(raw)
+        state = state.update_progress(current_location="cripta", discovered_location="cripta", visited_location="cripta")
+        self.assertEqual(state.data["progresso"]["local_atual"], "cripta")
+        self.assertIn("cripta", state.data["progresso"]["locais_descobertos"])
+        self.assertTrue(next(x for x in state.data["locais"] if x["id"] == "cripta")["visitado"])
+
     def test_adventure_generation_prompt_defines_stable_contract(self):
         prompt = adventure_generation_prompt()
         self.assertIn('"schema_version": 1', prompt)
