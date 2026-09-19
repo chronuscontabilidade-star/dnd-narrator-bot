@@ -86,6 +86,16 @@ def formatar_sugestoes(sugestoes: list) -> str:
     return "\n".join(linhas)
 
 
+async def enviar_texto_seguro(update, texto: str, **kwargs):
+    """Envia texto sem depender de Markdown e respeitando o limite do Telegram."""
+    limite = 4000
+    texto = str(texto or "")
+    if not texto:
+        return
+    for inicio in range(0, len(texto), limite):
+        await update.message.reply_text(texto[inicio:inicio + limite], **kwargs)
+
+
 # ─── /start & /ajuda ──────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -335,7 +345,7 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     texto = f"📖 {resultado['narrativa']}"
     if sugestoes_txt:
         texto += f"\n\n💡 *O que fazer agora?*\n{sugestoes_txt}"
-    await update.message.reply_text(texto, parse_mode="Markdown")
+    await enviar_texto_seguro(update, texto)
 
 
 # ─── /rolar ───────────────────────────────────────────────────────────────────
@@ -427,9 +437,8 @@ async def cmd_sugerir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             linhas.append(f"{i}. {s}")
 
     await update.message.reply_text(
-        f"💡 *Sugestões para {p['nome']}:*\n\n" + "\n\n".join(linhas) +
-        "\n\nUse `/acao` + descrição para agir!",
-        parse_mode="Markdown"
+        f"💡 Sugestões para {p['nome']}:\n\n" + "\n\n".join(linhas) +
+        "\n\nUse /acao + descrição para agir!"
     )
 
 
@@ -454,7 +463,7 @@ async def cmd_cena(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             caption=f"🏰 {resultado.get('descricao', '')}",
         )
     else:
-        await update.message.reply_text(f"🏰 *Cena atual:*\n\n{resultado.get('descricao', '')}", parse_mode="Markdown")
+        await enviar_texto_seguro(update, f"🏰 Cena atual:\n\n{resultado.get('descricao', '')}")
 
 
 # ─── /ficha ───────────────────────────────────────────────────────────────────
@@ -467,8 +476,7 @@ async def cmd_ficha(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"📜 *{p['nome']}* — {p['classe']} {p['raca']}\n\n"
         f"{formatar_atributos(p['atributos'])}\n\n"
-        f"📖 {p['historia']}",
-        parse_mode="Markdown"
+        f"📖 {p['historia']}"
     )
 
 
@@ -480,7 +488,7 @@ async def cmd_jogadores(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("👥 Nenhum jogador ainda.")
         return
     lista = "\n".join(f"• *{j['nome']}* — {j['classe']} {j['raca']}" for j in jogadores)
-    await update.message.reply_text(f"👥 *Jogadores ({len(jogadores)}):*\n\n{lista}", parse_mode="Markdown")
+    await enviar_texto_seguro(update, f"👥 Jogadores ({len(jogadores)}):\n\n{lista}")
 
 
 # ─── Setup de comandos ────────────────────────────────────────────────────────
