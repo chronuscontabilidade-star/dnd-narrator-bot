@@ -220,7 +220,10 @@ async def cmd_iniciar_historia(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not ficha.get("historia"):
             raise ValueError("ficha incompleta")
         intro = await narrator.iniciar_aventura(update.effective_chat.id)
-        db.criar_sessao(update.effective_chat.id, intro["contexto"])
+        # Não resetar a campanha ao adicionar um jogador. A nova campanha
+        # deve ser criada explicitamente por /nova_aventura.
+        if not db.obter_sessao(update.effective_chat.id):
+            db.criar_sessao(update.effective_chat.id, intro["contexto"])
         db.salvar_personagem(
             update.effective_user.id, update.effective_chat.id,
             p["nome"], p["classe"], p["raca"], atributos, ficha["historia"]
@@ -281,7 +284,11 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         # Garante que atributo existe na ficha (fallback seguro)
         if atributo not in p["atributos"]:
             atributo = "Destreza"
-        cd = int(avaliacao.get("cd", 12))
+        try:
+            cd = int(avaliacao.get("cd", 12))
+        except (TypeError, ValueError):
+            cd = 12
+        cd = max(1, min(cd, 30))
         teste = realizar_teste(p["atributos"], atributo, dificuldade=cd)
         try:
             await ctx.bot.edit_message_text(
@@ -307,9 +314,17 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             pass
 
     # Passo 3 — Gemini narra com o resultado real do dado
-    resultado = await narrator.narrar_acao_com_dado(sessao, p, jogadores, acao, teste)
-    novo_ctx = resultado.get("novo_contexto") or sessao["contexto"]
-    db.atualizar_contexto(chat_id, novo_ctx)
+    # Releia o estado após a chamada da IA: outro jogador pode ter agido durante o processamento.
+    sessao_atual = db.obter_sessao(chat_id) or sessao
+    historico = db.historico_recente(chat_id, limite=10)
+    resultado = await narrator.narrar_acao_com_dado(sessao_atual, p, jogadores, acao, teste, historico)
+    novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
+    if not db.atualizar_contexto(chat_id, novo_ctx, contexto_anterior=sessao_atual["contexto"]):
+        # Estado mudou durante a narrativa. Não sobrescreva o estado do outro jogador.
+        sessao_atual = db.obter_sessao(chat_id) or sessao_atual
+        resultado = await narrator.narrar_acao_com_dado(sessao_atual, p, jogadores, acao, teste, db.historico_recente(chat_id, 10))
+        novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
+        db.atualizar_contexto(chat_id, novo_ctx, contexto_anterior=sessao_atual["contexto"])
     db.registrar_acao(user_id, chat_id, acao, resultado["narrativa"])
 
     sugestoes_txt = formatar_sugestoes(resultado.get("sugestoes", []))
