@@ -118,7 +118,10 @@ class Narrator:
         return templates[seed]
 
     def _offline_personagem(self, nome: str, classe: str, raca: str, detalhes: str = "") -> dict:
-        from .game.character_creation import gerar_atributos
+        try:
+            from .game.character_creation import gerar_atributos
+        except ImportError:
+            from game.character_creation import gerar_atributos
 
         atributos = gerar_atributos(classe, raca)
         hist = f"{nome} é um {classe.lower()} de {raca.lower()} que nasceu para seguir em direção ao desconhecido."
