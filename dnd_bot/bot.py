@@ -76,7 +76,7 @@ Classe: {context.user_data.get('classe')}
 Raç©©a: {context.user_data.get('raca')}
 
 Use /mychar para ver seu personagem
-Use /startcampaign para iniciar uma campanha")
+Use /iniciar_historia para começar sua aventura")
     except Exception as e:
         log.error(f"Erro ao criar personagem: {e}")
         await update.message.reply_text("Erro ao criar personagem. Tente novamente.)")
@@ -98,6 +98,19 @@ Detalhes: {char.get('details', 'Nenhum')}")
         log.error(f"Erro ao buscar personagem: {e}")
         await update.message.reply_text("Erro ao buscar personagem.")
 
+async def iniciar_historia(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        char = db.get_character(update.effective_user.id)
+        if not char:
+            await update.message.reply_text("VocÅª nã©£o tem um personagem. Use /start para criar.")
+            return
+        await update.message.reply_text("Gerando sua história...")
+        historia = narrator.generate_character_intro(char)
+        await update.message.reply_text(f"{char['name']}, {char['class']} {char.get('race', '')}\n\n{historia}")
+    except Exception as e:
+        log.error(f"Erro ao gerar história: {e}")
+        await update.message.reply_text("Erro ao gerar história. Tente novamente.")
+
 async def startcampaign(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Para iniciar uma campanha, me diga:
 1. Nome da campanha
@@ -110,6 +123,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 /start - Criar novo personagem
 /mychar - Ver seu personagem
+/iniciar_historia - Gerar introduç©£o da sua história
 /startcampaign - Iniciar campanha
 /help - Esta mensagem")
 
@@ -124,6 +138,7 @@ def main():
     conv_handler = ConversationHandler(entry_points=[CommandHandler('start', start)], states={ENTRAR_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, entrar_nome)], ENTRAR_CLASSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, entrar_classe)], ENTRAR_RACA: [MessageHandler(filters.TEXT & ~filters.COMMAND, entrar_raca)], ENTRAR_DETALHES: [MessageHandler(filters.TEXT & ~filters.COMMAND, entrar_detalhes)]}, fallbacks=[])
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('mychar', mychar))
+    application.add_handler(CommandHandler('iniciar_historia', iniciar_historia))
     application.add_handler(CommandHandler('startcampaign', startcampaign))
     application.add_handler(CommandHandler('help', help_command))
     application.add_error_handler(error_handler)
