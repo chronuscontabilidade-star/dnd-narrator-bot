@@ -35,7 +35,7 @@ class Narrator:
         self.bastiao_api_key = os.getenv("BASTIAO_API_KEY", "")
         self.bastiao_model = os.getenv("BASTIAO_MODEL", "")
         self._provider_cooldowns = {}
-        self._cooldown_seconds = int(os.getenv("AI_PROVIDER_COOLDOWN", "300"))
+        self._cooldown_seconds = int(os.getenv("AI_PROVIDER_COOLDOWN", "300"))\n        self._request_timeout = float(os.getenv("AI_REQUEST_TIMEOUT", "20"))
         self.client = None
         self.model = None
         self.image_model = None
