@@ -138,6 +138,12 @@ class CampaignSimulator:
         )
         return SimulationResult(state=state, report=report)
 
+    def _quest_completed(self, state: AdventureState) -> bool:
+        return any(
+            quest.get("status") == "concluida"
+            for quest in state.data.get("quests", [])
+        )
+
     def _validate_initial_state(self, state: AdventureState) -> None:
         data = state.data
         current = data["progresso"].get("local_atual")
