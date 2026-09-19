@@ -1,6 +1,7 @@
 import unittest
 
 from dnd_bot.game.character import Character
+from dnd_bot.game.party import PartyDecision, PartyDecisionResolver, PartyVote
 from dnd_bot.game.simulator import (
     CampaignSimulator,
     GoalDrivenPlayerAgent,
@@ -122,6 +123,67 @@ class CampaignSimulatorTests(unittest.TestCase):
             "quest_cinzas",
             result.state.data["progresso"]["quests_concluidas"],
         )
+
+
+    def test_party_decision_requires_absolute_majority(self):
+        decision = PartyDecision(
+            id="decisao-1",
+            prompt="O que a party faz?",
+            options=("Investigar", "Conversar", "Sair"),
+            reason="A cena está parada.",
+        )
+        resolution = PartyDecisionResolver().resolve(
+            decision,
+            (
+                PartyVote("lia", "Investigar"),
+                PartyVote("bruno", "Investigar"),
+                PartyVote("caio", "Conversar"),
+            ),
+        )
+
+        self.assertTrue(resolution.accepted)
+        self.assertEqual(resolution.selected_option, "Investigar")
+        self.assertEqual(resolution.executor_id, "lia")
+        self.assertEqual(resolution.counts["Investigar"], 2)
+        self.assertFalse(resolution.tied)
+
+    def test_party_decision_tie_does_not_execute(self):
+        decision = PartyDecision(
+            id="decisao-empate",
+            prompt="Qual caminho?",
+            options=("Esquerda", "Direita"),
+            reason="Dois caminhos possíveis.",
+        )
+        resolution = PartyDecisionResolver().resolve(
+            decision,
+            (
+                PartyVote("lia", "Esquerda"),
+                PartyVote("bruno", "Direita"),
+            ),
+        )
+
+        self.assertFalse(resolution.accepted)
+        self.assertIsNone(resolution.selected_option)
+        self.assertIsNone(resolution.executor_id)
+        self.assertTrue(resolution.tied)
+        self.assertEqual(resolution.reason, "Empate: a decisão foi rejeitada sem alterar o estado.")
+
+    def test_party_decision_rejects_duplicate_voter(self):
+        decision = PartyDecision(
+            id="decisao-duplicada",
+            prompt="Escolha.",
+            options=("A", "B"),
+            reason="Teste.",
+        )
+
+        with self.assertRaises(ValueError):
+            PartyDecisionResolver().resolve(
+                decision,
+                (
+                    PartyVote("lia", "A"),
+                    PartyVote("lia", "B"),
+                ),
+            )
 
     def test_invalid_initial_campaign_is_reported(self):
         state = build_vertical_slice_adventure().to_dict()
