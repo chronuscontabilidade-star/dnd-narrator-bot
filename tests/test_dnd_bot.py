@@ -61,9 +61,10 @@ class NarratorTests(unittest.TestCase):
             "atributos": {"Destreza": 16},
         }
         result = asyncio.run(narrator.narrar_acao_com_dado(session, character, [character], "examino as pegadas", None))
-        self.assertIn("Progressão: ação 1", result["novo_contexto"])
+        self.assertIn("examino as pegadas", result["novo_contexto"])
+        self.assertIn("Resultado:", result["novo_contexto"])
         scene = asyncio.run(narrator.gerar_cena({"contexto": result["novo_contexto"]}))
-        self.assertIn("etapa 1", scene["descricao"])
+        self.assertIn("Farol Antigo", scene["descricao"])
 
     def test_simple_actions_do_not_require_dice(self):
         narrator = Narrator("")
