@@ -132,6 +132,12 @@ class AdventureValidator:
             step_ids: set[str] = set()
             for step in steps:
                 step_id = step.get("id")
+                target = step.get("local_objetivo")
+                if target is not None and target not in location_ids:
+                    issues.append(ValidationIssue(
+                        "broken_quest_location",
+                        f"Quest {quest_id}, etapa {step_id} referencia local inexistente: {target}",
+                    ))
                 if not step_id:
                     issues.append(ValidationIssue(
                         "missing_quest_step_id",
