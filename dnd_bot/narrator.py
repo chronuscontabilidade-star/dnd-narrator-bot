@@ -214,7 +214,7 @@ class Narrator:
         providers = []
         if self.api_key and genai is not None and self.model and self._provider_available("gemini"):
             providers.append(("gemini", lambda: self._call_gemini_json(prompt)))
-        if self.alt_api_key and self.alt_base_url and self.alt_model and self._provider_available("alternative"):
+        if self.alt_base_url and self.alt_model and self._provider_available("alternative"):
             providers.append(("alternative", lambda: self._call_openai_compatible_json(self.alt_base_url, self.alt_api_key, self.alt_model, prompt, "alternative")))
         if self.bastiao_base_url and self.bastiao_model and self._provider_available("bastiao"):
             providers.append(("bastiao", lambda: self._call_openai_compatible_json(self.bastiao_base_url, self.bastiao_api_key, self.bastiao_model, prompt, "bastiao")))
@@ -405,8 +405,8 @@ class Narrator:
     def _choose_provider(self):
         providers = [
             ("gemini", self.api_key and genai is not None and self.client is not None),
-            ("alternative", bool(self.alt_api_key and self.alt_base_url and self.alt_model)),
-            ("bastiao", bool(self.bastiao_api_key and self.bastiao_base_url and self.bastiao_model)),
+            ("alternative", bool(self.alt_base_url and self.alt_model)),
+            ("bastiao", bool(self.bastiao_base_url and self.bastiao_model)),
         ]
         for name, enabled in providers:
             if enabled and self._provider_available(name):
