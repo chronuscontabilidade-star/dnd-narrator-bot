@@ -156,6 +156,8 @@ class CombatState:
     def _require_current(self, combatant: Combatant) -> None:
         if not self.started:
             raise RuntimeError("O combate ainda não foi iniciado.")
+        if self.finished:
+            raise ValueError("O combate terminou.")
         if combatant is not self.current:
             raise ValueError("Não é o turno desse combatente.")
         if not combatant.is_alive:
