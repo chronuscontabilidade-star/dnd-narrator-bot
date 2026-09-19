@@ -245,8 +245,12 @@ async def cmd_iniciar_historia(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 async def cmd_nova_aventura(update, ctx):
+    chat_id = update.effective_chat.id
+    intro = await narrator.iniciar_aventura(chat_id)
+    db.criar_sessao(chat_id, intro["contexto"], reset=True)
     await update.message.reply_text(
-        "Para iniciar uma nova partida, use /start e crie um novo personagem."
+        f"🆕 Nova aventura criada: {intro['titulo']}\n\n"
+        "Os personagens desta campanha foram limpos. Use /start para criar o personagem desta nova partida."
     )
 
 
