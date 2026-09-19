@@ -233,7 +233,12 @@ async def finalizar_personagem(update, ctx, estado):
     estados(ctx).pop(estado_key(update), None)
     personagem = {"nome": p["nome"], "raca": p["raca"], "classe": p["classe"], "atributos": atributos, "detalhes": p.get("detalhes", ""), "historia": ficha["historia"]}
     await update.message.reply_text(formatar_ficha_completa(personagem), reply_markup=ReplyKeyboardRemove())
-    await enviar_texto_seguro(update, f"📚 *{intro['titulo']}*\n\n{intro['narrativa']}", parse_mode="Markdown")
+    # A introdução é texto gerado pela IA. Não use Markdown aqui: títulos,
+    # nomes e narrativa podem conter caracteres reservados e impedir o envio.
+    await enviar_texto_seguro(
+        update,
+        f"📚 {intro['titulo']}\n\n{intro['narrativa']}",
+    )
 
 async def receber_detalhes(update, ctx):
     estado = estados(ctx).get(estado_key(update))
