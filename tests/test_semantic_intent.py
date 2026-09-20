@@ -47,7 +47,7 @@ class SemanticIntentTests(unittest.TestCase):
         )
         self.assertEqual(intent.tipo, "movimento")
         self.assertFalse(intent.requer_teste)
-        self.assertIsNone(intent.destino)
+        self.assertEqual(intent.destino, "corredor")
 
     def test_semantic_parser_cannot_invent_unknown_destination(self):
         narrator = Narrator("")
