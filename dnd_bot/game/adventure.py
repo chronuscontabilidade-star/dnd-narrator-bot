@@ -73,9 +73,14 @@ class AdventureState:
         """Aplica mudanças pequenas e determinísticas ao estado da aventura."""
         data = self.to_dict()
         progress = data["progresso"]
+        location_ids = {location.get("id") for location in data.get("locais", [])}
         if current_location is not None:
+            if current_location not in location_ids:
+                raise ValueError(f"Local inexistente: {current_location}")
             progress["local_atual"] = current_location
         if discovered_location:
+            if discovered_location not in location_ids:
+                raise ValueError(f"Local inexistente: {discovered_location}")
             discovered = progress.setdefault("locais_descobertos", [])
             if discovered_location not in discovered:
                 discovered.append(discovered_location)
@@ -84,6 +89,8 @@ class AdventureState:
                     location["descoberto"] = True
                     break
         if visited_location:
+            if visited_location not in location_ids:
+                raise ValueError(f"Local inexistente: {visited_location}")
             visited = progress.setdefault("locais_visitados", [])
             if visited_location not in visited:
                 visited.append(visited_location)
@@ -100,15 +107,20 @@ class AdventureState:
         for secret in data.get("segredos", []):
             if secret.get("id") == secret_id:
                 secret["revelado"] = True
-                break
+                return AdventureState.from_dict(data)
+        raise ValueError(f"Segredo inexistente: {secret_id}")
         return AdventureState.from_dict(data)
 
     def complete_encounter(self, encounter_id: str) -> "AdventureState":
         data = self.to_dict()
+        found = False
         for encounter in data.get("encounters", []):
             if encounter.get("id") == encounter_id:
                 encounter["status"] = "concluido"
+                found = True
                 break
+        if not found:
+            raise ValueError(f"Encontro inexistente: {encounter_id}")
         completed = data["progresso"].setdefault("encounters_concluidos", [])
         if encounter_id not in completed:
             completed.append(encounter_id)
@@ -116,12 +128,16 @@ class AdventureState:
 
     def complete_quest_step(self, quest_id: str, step_id: str) -> "AdventureState":
         data = self.to_dict()
+        quest_found = False
+        step_found = False
         for quest in data.get("quests", []):
             if quest.get("id") != quest_id:
                 continue
+            quest_found = True
             for step in quest.get("etapas", []):
                 if step.get("id") == step_id:
                     step["status"] = "concluida"
+                    step_found = True
             if quest.get("etapas") and all(step.get("status") == "concluida" for step in quest["etapas"]):
                 quest["status"] = "concluida"
                 completed = data["progresso"].setdefault("quests_concluidas", [])
