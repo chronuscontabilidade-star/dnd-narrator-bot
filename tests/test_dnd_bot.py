@@ -7,7 +7,7 @@ from dnd_bot.database import Database
 from dnd_bot.game.adventure import AdventureState, SCHEMA_VERSION, adventure_generation_prompt
 from dnd_bot.dice import realizar_teste
 from dnd_bot.narrator import Narrator
-from dnd_bot.bot import _movimento_permitido
+from dnd_bot.game.action import movimento_permitido
 
 
 class NarratorTests(unittest.TestCase):
@@ -125,8 +125,8 @@ class NarratorTests(unittest.TestCase):
                           "encounters_concluidos": [], "quests_concluidas": [], "eventos_importantes": []},
         }
         state = AdventureState.from_dict(raw)
-        self.assertTrue(_movimento_permitido(state, "sala"))
-        self.assertFalse(_movimento_permitido(state, "longe"))
+        self.assertTrue(movimento_permitido(state.to_dict(), "sala"))
+        self.assertFalse(movimento_permitido(state.to_dict(), "longe"))
 
     def test_adventure_generation_prompt_defines_stable_contract(self):
         prompt = adventure_generation_prompt()
