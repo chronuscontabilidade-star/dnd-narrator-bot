@@ -494,9 +494,10 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     },
                 )
 
-        db.atualizar_aventura(chat_id, estado.to_dict())
+        aventura_nova = estado.to_dict()
     except (ValueError, TypeError, KeyError) as exc:
         log.warning("Não foi possível atualizar AdventureState: %s", exc)
+        aventura_nova = sessao_atual.get("aventura") or aventura_atual
 
     novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
     if novo_ctx.strip() == sessao_atual["contexto"].strip():
@@ -509,9 +510,10 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"Evento: {p['nome']} realizou '{acao}'. Resultado: {status}."
         )
 
-    contexto_ok = db.atualizar_contexto(
+    contexto_ok = db.atualizar_estado_campanha(
         chat_id,
         novo_ctx,
+        aventura_nova,
         contexto_anterior=sessao_atual["contexto"],
     )
     if not contexto_ok:
