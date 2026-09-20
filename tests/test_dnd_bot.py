@@ -284,6 +284,23 @@ class DatabaseTests(unittest.TestCase):
             database.criar_sessao(1, "aventura ainda ativa")
             self.assertEqual({p["nome"] for p in database.listar_jogadores(1)}, {"Kira", "Thorin"})
 
+    def test_action_lock_serializes_same_chat(self):
+        from dnd_bot.bot import action_locks
+
+        class App:
+            bot_data = {}
+
+        class Ctx:
+            application = App()
+
+        ctx = Ctx()
+        locks = action_locks(ctx)
+        first = locks.setdefault(123, asyncio.Lock())
+        second = locks.setdefault(123, asyncio.Lock())
+        other = locks.setdefault(456, asyncio.Lock())
+        self.assertIs(first, second)
+        self.assertIsNot(first, other)
+
     def test_context_compare_and_set_rejects_stale_update(self):
         with tempfile.TemporaryDirectory() as directory:
             database = Database(str(Path(directory) / "test.db"))
