@@ -159,6 +159,19 @@ class CombatTests(unittest.TestCase):
         with self.assertRaises((RuntimeError, ValueError)):
             combat.attack(hero, goblin, rng=FixedRng([10]))
 
+    def test_duplicate_combatant_names_are_rejected(self):
+        hero = Combatant("Heroi", 12, 10, 10, is_player=True)
+        duplicate = Combatant("Heroi", 12, 10, 10)
+        with self.assertRaises(ValueError):
+            CombatState([hero, duplicate])
+
+    def test_combat_cannot_start_twice(self):
+        hero = Combatant("Heroi", 12, 10, 10, is_player=True)
+        goblin = Combatant("Goblin", 12, 7, 7)
+        combat = started_combat(hero, goblin)
+        with self.assertRaises(RuntimeError):
+            combat.start(FixedRng([10, 10]))
+
     def test_character_conversion(self):
         character = Character(
             name="Kira",
