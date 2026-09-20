@@ -286,6 +286,96 @@ class CombatState:
         self._require_current(combatant)
         return self.advance_turn()
 
+    def to_dict(self) -> dict:
+        """Serializa o combate para persistência no AdventureState."""
+        return {
+            "combatants": [
+                {
+                    "name": c.name,
+                    "armor_class": c.armor_class,
+                    "max_hp": c.max_hp,
+                    "hp": c.hp,
+                    "dexterity": c.dexterity,
+                    "attack_bonus": c.attack_bonus,
+                    "damage_dice": c.damage_dice,
+                    "damage_bonus": c.damage_bonus,
+                    "is_player": c.is_player,
+                    "initiative": c.initiative,
+                    "speed": c.speed,
+                    "position": list(c.position),
+                }
+                for c in self.combatants
+            ],
+            "turn_index": self.turn_index,
+            "round": self.round,
+            "started": self.started,
+            "turn_states": {
+                name: {
+                    "movement_remaining": state.movement_remaining,
+                    "action_used": state.action_used,
+                    "bonus_action_used": state.bonus_action_used,
+                    "reaction_available": state.reaction_available,
+                    "dash_used": state.dash_used,
+                    "dodge_active": state.dodge_active,
+                    "disengaged": state.disengaged,
+                }
+                for name, state in self.turn_states.items()
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "CombatState":
+        """Reconstrói um combate persistido, rejeitando estado malformado."""
+        if not isinstance(raw, dict):
+            raise ValueError("Estado de combate inválido.")
+        combatants = []
+        for item in raw.get("combatants", []):
+            if not isinstance(item, dict):
+                raise ValueError("Combatente inválido.")
+            position = item.get("position", [0, 0])
+            if not isinstance(position, (list, tuple)) or len(position) != 2:
+                raise ValueError("Posição de combate inválida.")
+            combatant = Combatant(
+                name=str(item.get("name", "")),
+                armor_class=int(item.get("armor_class", 10)),
+                max_hp=int(item.get("max_hp", 1)),
+                hp=int(item.get("hp", 1)),
+                dexterity=int(item.get("dexterity", 10)),
+                attack_bonus=int(item.get("attack_bonus", 0)),
+                damage_dice=str(item.get("damage_dice", "1d4")),
+                damage_bonus=int(item.get("damage_bonus", 0)),
+                is_player=bool(item.get("is_player", False)),
+                initiative=item.get("initiative"),
+                speed=int(item.get("speed", 30)),
+                position=(int(position[0]), int(position[1])),
+            )
+            combatants.append(combatant)
+
+        state = cls(
+            combatants=combatants,
+            turn_index=int(raw.get("turn_index", 0)),
+            round=int(raw.get("round", 1)),
+            started=bool(raw.get("started", False)),
+        )
+        if state.started:
+            if not state.combatants:
+                raise ValueError("Combate iniciado sem combatentes.")
+            if not 0 <= state.turn_index < len(state.combatants):
+                raise ValueError("Índice de turno inválido.")
+            state.turn_states = {}
+            for combatant in state.combatants:
+                data = (raw.get("turn_states") or {}).get(combatant.name, {})
+                state.turn_states[combatant.name] = TurnState(
+                    movement_remaining=int(data.get("movement_remaining", combatant.speed)),
+                    action_used=bool(data.get("action_used", False)),
+                    bonus_action_used=bool(data.get("bonus_action_used", False)),
+                    reaction_available=bool(data.get("reaction_available", True)),
+                    dash_used=bool(data.get("dash_used", False)),
+                    dodge_active=bool(data.get("dodge_active", False)),
+                    disengaged=bool(data.get("disengaged", False)),
+                )
+        return state
+
     def attack(
         self,
         attacker: Combatant,
