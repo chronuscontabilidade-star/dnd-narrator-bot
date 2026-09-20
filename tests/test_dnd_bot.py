@@ -7,7 +7,7 @@ from dnd_bot.database import Database
 from dnd_bot.game.adventure import AdventureState, SCHEMA_VERSION, adventure_generation_prompt
 from dnd_bot.dice import realizar_teste
 from dnd_bot.narrator import Narrator
-from dnd_bot.game.action import movimento_permitido
+from dnd_bot.game.action import ActionResolver, movimento_permitido
 
 
 class NarratorTests(unittest.TestCase):
@@ -109,6 +109,25 @@ class NarratorTests(unittest.TestCase):
         }
         with self.assertRaises(ValueError):
             AdventureState.from_dict(raw)
+
+    def test_attack_intent_targets_active_combatant(self):
+        adventure = {
+            "combate": {
+                "combatants": [
+                    {"name": "Kira"},
+                    {"name": "Goblin Rei"},
+                ]
+            }
+        }
+        intent = ActionResolver(adventure).resolve("atacar Goblin Rei")
+        self.assertEqual(intent.tipo, "ataque")
+        self.assertEqual(intent.alvo, "Goblin Rei")
+        self.assertFalse(intent.requer_teste)
+
+    def test_attack_intent_does_not_invent_target(self):
+        intent = ActionResolver({"combate": {"combatants": [{"name": "Goblin"}]}}).resolve("atacar o dragão")
+        self.assertEqual(intent.tipo, "ataque")
+        self.assertIsNone(intent.alvo)
 
     def test_movement_does_not_teleport_to_discovered_location(self):
         raw = {
