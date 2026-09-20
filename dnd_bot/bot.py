@@ -426,9 +426,34 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             },
         )
 
-        if intent.tipo == "movimento" and intent.destino:
+        # A progressão da cena é estado de jogo, não apenas texto de contexto.
+        # Isso impede que o fallback volte para o mesmo beat narrativo a cada ação.
+        progresso_atual = estado.data["progresso"]
+        progresso_atual["etapa_cena"] = int(progresso_atual.get("etapa_cena", 0) or 0) + 1
+
+        if intent.tipo == "movimento":
             locais = estado.data.get("locais", [])
-            destino = next((l for l in locais if l.get("id") == intent.destino), None)
+            destino = next((l for l in locais if l.get("id") == intent.destino), None) if intent.destino else None
+
+            # "entrar/acessar" sem nome de destino pode avançar para a próxima
+            # área conectada descoberta pelo mapa, mas nunca salta para um local
+            # arbitrariamente distante.
+            if destino is None and any(
+                termo in ActionResolver.normalize(acao)
+                for termo in ("entrar", "acessar")
+            ):
+                local_atual = progresso_atual.get("local_atual")
+                atual = next((l for l in locais if l.get("id") == local_atual), None)
+                proximo = next(
+                    (
+                        l for l in locais
+                        if l.get("id") in (atual or {}).get("conexoes", [])
+                        and not l.get("descoberto")
+                    ),
+                    None,
+                )
+                destino = proximo
+
             if destino and movimento_permitido(estado.to_dict(), destino["id"]):
                 estado = estado.update_progress(
                     current_location=destino["id"],
@@ -617,87 +642,3 @@ async def cmd_ficha(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     await enviar_texto_seguro(update, formatar_ficha_completa(p))
 
-
-
-# ─── /jogadores ───────────────────────────────────────────────────────────────
-
-async def cmd_jogadores(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    jogadores = db.listar_jogadores(update.effective_chat.id)
-    if not jogadores:
-        await update.message.reply_text("👥 Nenhum jogador ainda.")
-        return
-    lista = "\n".join(f"• {j['nome']} — {j['classe']} {j['raca']}" for j in jogadores)
-    await enviar_texto_seguro(update, f"👥 Jogadores ({len(jogadores)}):\n\n{lista}")
-
-
-# ─── Setup de comandos ────────────────────────────────────────────────────────
-
-async def configurar_comandos(app):
-    await app.bot.set_my_commands([
-        BotCommand("start",           "Criar personagem"),
-        BotCommand("iniciar_historia","Finalizar ficha e iniciar história"),
-        BotCommand("acao",            "Fazer uma ação na aventura"),
-        BotCommand("rolar",           "Rolar dado livremente"),
-        BotCommand("sugerir",         "Sugestões de ação para seu personagem"),
-        BotCommand("cena",            "Descrever a cena atual"),
-        BotCommand("ficha",           "Ver sua ficha de personagem"),
-        BotCommand("jogadores",       "Listar jogadores na sessão"),
-        BotCommand("ajuda",           "Mostrar todos os comandos"),
-        BotCommand("entrar",          "Recriar personagem"),
-        BotCommand("cancelar",        "Cancelar criação de personagem"),
-    ])
-
-
-# ─── Main ─────────────────────────────────────────────────────────────────────
-
-def main():
-    token = os.getenv("TELEGRAM_TOKEN")
-    if not token:
-        raise ValueError("TELEGRAM_TOKEN não encontrado no .env!")
-
-    proxy = os.getenv("TELEGRAM_PROXY") or None
-    req_kwargs = dict(connect_timeout=30, read_timeout=60, write_timeout=30, pool_timeout=30, proxy=proxy)
-    request         = HTTPXRequest(connection_pool_size=8, **req_kwargs)
-    updates_request = HTTPXRequest(connection_pool_size=2, **req_kwargs)
-
-    def build_app():
-        app = (
-            ApplicationBuilder()
-            .token(token)
-            .request(request)
-            .get_updates_request(updates_request)
-            .post_init(configurar_comandos)
-            .build()
-        )
-        # Handlers de comando
-        cmds = [
-            ("start",            cmd_start),
-            ("ajuda",            cmd_ajuda),
-            ("entrar",           cmd_entrar),
-            ("iniciar_historia", cmd_iniciar_historia),
-            ("cancelar",         cancelar_entrada),
-            ("nova_aventura",    cmd_nova_aventura),
-            ("acao",             cmd_acao),
-            ("rolar",            cmd_rolar),      # RESTAURADO
-            ("sugerir",          cmd_sugerir),    # RESTAURADO
-            ("cena",             cmd_cena),       # RESTAURADO
-            ("ficha",            cmd_ficha),
-            ("jogadores",        cmd_jogadores),
-        ]
-        for command, handler in cmds:
-            app.add_handler(CommandHandler(command, handler))
-        # Handler de texto livre (fluxo de criação de personagem)
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, processar_entrada))
-        return app
-
-    while True:
-        try:
-            build_app().run_polling(timeout=30, bootstrap_retries=-1, close_loop=False)
-            break
-        except (NetworkError, TimedOut) as exc:
-            log.error("Falha de rede: %s; tentando novamente em 15 segundos", exc)
-            time.sleep(15)
-
-
-if __name__ == "__main__":
-    main()
