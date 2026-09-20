@@ -254,7 +254,7 @@ class ActionResolver:
             "provocar", "chamar para lutar", "chamar pra lutar",
             "convidar para lutar", "convidar pra lutar", "ameacar de briga",
         )
-        if any(word in n for word in challenge_words):
+        if any(word in n for word in challenge_words) or ("chamar" in n and "briga" in n) or ("desafiar" in n and ("lutar" in n or "briga" in n)):
             return ActionIntent(
                 tipo="social",
                 descricao=text,
