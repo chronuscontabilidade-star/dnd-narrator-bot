@@ -301,6 +301,27 @@ class DatabaseTests(unittest.TestCase):
         self.assertIs(first, second)
         self.assertIsNot(first, other)
 
+    def test_campaign_state_update_is_atomic_and_uses_cas(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(str(Path(directory) / "test.db"))
+            database.criar_sessao(1, "A", aventura={"stage": 0})
+            self.assertTrue(
+                database.atualizar_estado_campanha(
+                    1, "B", {"stage": 1}, contexto_anterior="A"
+                )
+            )
+            session = database.obter_sessao(1)
+            self.assertEqual(session["contexto"], "B")
+            self.assertEqual(session["aventura"], {"stage": 1})
+            self.assertFalse(
+                database.atualizar_estado_campanha(
+                    1, "C", {"stage": 2}, contexto_anterior="A"
+                )
+            )
+            session = database.obter_sessao(1)
+            self.assertEqual(session["contexto"], "B")
+            self.assertEqual(session["aventura"], {"stage": 1})
+
     def test_context_compare_and_set_rejects_stale_update(self):
         with tempfile.TemporaryDirectory() as directory:
             database = Database(str(Path(directory) / "test.db"))
