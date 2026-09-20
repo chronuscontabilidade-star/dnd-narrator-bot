@@ -1,9 +1,94 @@
 # D&D Narrator Bot
 
-Bot de RPG D&D para Telegram, com criação guiada de personagens, regras de
-atributos de D&D 5e, rolagens de dados, narrativa com IA e fallback offline.
+Bot de RPG para Telegram baseado em **D&D 5e 2014**, com narrativa generativa, regras determinísticas, campanhas estruturadas e fallback offline.
 
-## Executar
+## Estado atual
+
+A branch `fix/stability-audit-2026-09` contém o primeiro núcleo jogável/testável do projeto.
+
+### O que já existe
+
+- criação guiada de personagens;
+- geração determinística de atributos com 4d6, descartando o menor;
+- bônus raciais das raças atualmente oferecidas;
+- ActionResolver para classificar ações;
+- testes de atributos e perícias básicos;
+- AdventureState estruturado;
+- geração estruturada de aventuras;
+- validação estrutural e semântica da aventura;
+- GameEngine inicial;
+- combate determinístico inicial;
+- iniciativa, turnos, movimento, ação, ataque, dano, crítico e estados básicos;
+- Diretor de Cena com níveis de intervenção;
+- decisões multiplayer com votação e maioria absoluta;
+- participação individual após a decisão;
+- Campaign Simulator determinístico;
+- agentes de jogador com perfis diferentes;
+- validação do estado durante a simulação;
+- relatório final da simulação;
+- testes automatizados de regressão;
+- CI básico via GitHub Actions;
+- deploy configurado no Railway.
+
+## Arquitetura atual
+
+O princípio central é:
+
+```
+IA / Narrador
+    ↓ propõe, interpreta e narra
+Director / Party
+    ↓ organiza oportunidades e decisões
+ActionResolver
+    ↓ transforma intenção em ação mecânica
+GameEngine
+    ↓ valida e aplica regras
+AdventureState
+    ↓ representa o estado atual
+Validator
+    ↓ detecta inconsistências
+Persistência
+```
+
+**Regra:** a IA não é a autoridade das regras nem grava diretamente alterações arbitrárias no estado da campanha.
+
+## Simulador
+
+O simulador existe para testar o jogo sem precisar jogar manualmente uma campanha inteira.
+
+Executar:
+
+```bash
+python -m dnd_bot.game.simulator
+```
+
+Ele consegue exercitar:
+
+- exploração;
+- ações;
+- testes;
+- combate inicial;
+- quests;
+- decisões multiplayer;
+- participação individual;
+- Diretor de Cena;
+- validação estrutural/semântica;
+- detecção de loops;
+- relatório de execução.
+
+O simulador atual é propositalmente determinístico e ainda possui alguns trechos de vertical slice/hardcoded. Ele é uma ferramenta de engenharia, não o motor final de campanha.
+
+## Testes
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+O projeto também possui workflow em `.github/workflows/tests.yml`.
+
+> Observação: a existência do workflow não significa que o último commit esteja com uma execução do GitHub Actions registrada. Esse status deve ser verificado no GitHub antes do merge.
+
+## Execução
 
 ```powershell
 cd dnd_bot
@@ -12,81 +97,38 @@ Copy-Item .env.example .env
 python bot.py
 ```
 
-Configure os tokens no `.env`. Para desenvolvimento, o banco usa SQLite em
-`DATABASE_PATH` (padrão `dnd.db`). Em produção, defina
-`SUPABASE_DB_URL` com uma URL Postgres do Supabase; ela tem prioridade sobre
-`DATABASE_PATH`. Consulte [`dnd_bot/README.md`](dnd_bot/README.md) para as
-opções de Gemini, Groq, OpenRouter, Ollama, proxy e implantação.
+Configure os tokens/providers no `.env`.
 
-## Testes
+Para desenvolvimento, o banco usa SQLite em `DATABASE_PATH`. Em produção, `SUPABASE_DB_URL` pode apontar para PostgreSQL/Supabase.
 
-```powershell
-python -m unittest discover -s tests
-```
+Para detalhes de providers, banco, variáveis de ambiente e operação, consulte [`dnd_bot/README.md`](dnd_bot/README.md).
 
-## Roadmap de evolução
+## Documentação
 
-### Fase 0, estabilização
-- [x] Corrigir bugs críticos da auditoria.
-- [x] Adicionar testes de regressão.
-- [x] Criar CI básico.
-- [ ] Validar CI da branch.
-- [ ] Revisar e fazer merge.
+- [Roadmap completo](docs/ROADMAP.md)
+- [Documentação técnica do bot](dnd_bot/README.md)
 
-### Fase 1, GameEngine
-- [ ] Separar estado do jogo da narrativa.
-- [ ] Criar GameEngine como fonte de verdade.
-- [ ] Mover regras determinísticas para módulos próprios.
-- [ ] Implementar HP, CA, nível, XP e proficiências.
-- [ ] Implementar inventário e recursos.
-- [ ] Criar sistema de eventos.
+## Estado de maturidade
 
-### Fase 2, combate
-- [ ] Iniciativa e turnos.
-- [ ] Ação, ação bônus, reação e movimento.
-- [ ] Ataques, dano e defesa.
-- [ ] Condições.
-- [ ] Morte e death saves.
-- [ ] Monstros e NPCs estruturados.
+O projeto está em **fase de construção do núcleo do jogo**, não em fase de produto final.
 
-### Fase 3, mundo persistente
-- [ ] Campanhas separadas do chat.
-- [ ] Jogadores vinculados a campanhas.
-- [ ] NPCs persistentes.
-- [ ] Locais e mapas.
-- [ ] Quests.
-- [ ] Fatos do mundo.
-- [ ] Eventos históricos.
-- [ ] Memória narrativa.
+Ainda não estão completos:
 
-### Fase 4, Mestre de IA
-- [ ] IA como intérprete e narrador, não autoridade sobre regras.
-- [ ] Tool calling.
-- [ ] Consulta estruturada ao GameEngine.
-- [ ] Memória de longo prazo.
-- [ ] Planejamento de cenas.
-- [ ] NPCs com objetivos e personalidade.
-- [ ] Continuidade de lore.
-
-### Fase 5, multimídia
-- [ ] Imagens de cena.
-- [ ] Retratos.
-- [ ] Mapas.
-- [ ] Voz do Mestre.
-- [ ] Áudio de personagens.
-- [ ] Handouts.
-
-### Fase 6, operação
-- [ ] Logs estruturados.
-- [ ] Métricas.
-- [ ] Health check.
-- [ ] Backup e restore.
-- [ ] Controle de custos por provider.
-- [ ] Rate limiting.
-- [ ] Observabilidade.
+- ficha completa de D&D 5e 2014;
+- inventário/equipamentos determinísticos completos;
+- condições completas;
+- combate completo;
+- persistência completa de Campaign/Players/Characters/NPCs/etc.;
+- memória de longo prazo e ContextBuilder;
+- AI Manager completo;
+- geração dinâmica com múltiplos caminhos e pistas redundantes validados;
+- simulador de campanha completo e imprevisível;
+- multimídia;
+- observabilidade/produção;
+- painel web e recursos de produto.
 
 ## Princípio arquitetural
 
-A IA narra e interpreta. O GameEngine decide e valida. O banco persiste.
+**A IA narra e interpreta. O código decide, valida e aplica. O banco persiste.**
 
 O objetivo é impedir que uma resposta criativa do modelo altere arbitrariamente HP, inventário, regras, turnos ou estado da campanha.
