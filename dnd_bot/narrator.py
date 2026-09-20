@@ -434,69 +434,150 @@ class Narrator:
             "motivo": "IA indisponível e ação ambígua; seguindo sem bloquear o jogador.",
         }
 
+    @staticmethod
+    def _validar_narrativa(data: dict, contexto_atual: str) -> dict:
+        """Valida a resposta narrativa para impedir placeholders e contexto estagnado."""
+        if not isinstance(data, dict):
+            raise ValueError("Narrativa inválida: resposta não é objeto JSON")
+        narrativa = str(data.get("narrativa") or "").strip()
+        if not narrativa:
+            raise ValueError("Narrativa vazia")
+        contexto = str(data.get("novo_contexto") or "").strip()
+        proibidos = (
+            "a cena avança a partir dessa decisão",
+            "a cena avança",
+            "o narrador descreve o que acontece",
+            "algo acontece",
+            "a aventura continua",
+        )
+        texto_norm = Narrator._normalizar_acao(narrativa)
+        if any(Narrator._normalizar_acao(p) in texto_norm for p in proibidos):
+            raise ValueError("Narrativa genérica/placeholder rejeitada")
+        if len(narrativa) < 60:
+            raise ValueError("Narrativa curta demais para representar uma consequência")
+        if not contexto or contexto.strip() == str(contexto_atual or "").strip():
+            raise ValueError("Narrativa não produziu fato novo no contexto")
+        sugestoes = data.get("sugestoes")
+        if not isinstance(sugestoes, list):
+            sugestoes = []
+        return {
+            "narrativa": narrativa[:6000],
+            "novo_contexto": contexto[:4000],
+            "sugestoes": sugestoes[:5],
+        }
+
+    def _fallback_narrativa(self, sessao: dict, personagem: dict, acao: str, teste: dict | None) -> dict:
+        """Narrador determinístico de emergência: sempre produz uma consequência concreta."""
+        contexto = str(sessao.get("contexto", "") or "").strip()
+        aventura = sessao.get("aventura") or {}
+        progresso = aventura.get("progresso") or {}
+        locais = aventura.get("locais") or []
+        local_id = progresso.get("local_atual")
+        local = next((x for x in locais if x.get("id") == local_id), None)
+        local_nome = (local or {}).get("nome") or "o local atual"
+        local_desc = (local or {}).get("descricao") or contexto
+        nome = personagem.get("nome", "O personagem")
+        historia = str(personagem.get("historia") or "")
+        texto = (acao or "").strip()
+        n = self._normalizar_acao(texto)
+        sucesso = bool(teste and teste.get("sucesso"))
+        resultado_txt = "sucesso" if teste and sucesso else "falha" if teste else "sem teste"
+
+        if any(x in n for x in ("olhar", "observar", "ver", "olho ao redor")):
+            narr = (
+                f"{nome} para por um instante e examina {local_nome} com atenção. "
+                f"{local_desc[:260]} "
+                "Entre os detalhes mais fáceis de ignorar, há uma diferença importante: "
+                "algumas marcas no chão são recentes e terminam perto de uma passagem, como se alguém tivesse parado ali."
+            )
+            evento = f"{nome} examinou {local_nome} e identificou marcas recentes próximas a uma passagem."
+        elif any(x in n for x in ("ouvir", "escutar", "detectar", "perceber")):
+            if teste and not sucesso:
+                narr = (
+                    f"{nome} força a audição contra o ruído ao redor, mas a tentativa não produz uma certeza. "
+                    "A tempestade e os sons do ambiente mascaram qualquer presença, e ele não consegue determinar "
+                    "se há alguém escondido. Ainda assim, o silêncio entre uma rajada e outra revela que algo no local "
+                    "não combina com o restante da cena."
+                )
+                evento = f"{nome} falhou em detectar uma presença, mas percebeu uma anomalia sonora no ambiente."
+            else:
+                narr = (
+                    f"{nome} concentra a atenção nos sons ao redor de {local_nome}. "
+                    "Depois de separar o ruído do vento dos sons mais próximos, percebe uma movimentação abafada "
+                    "além da área imediatamente visível."
+                )
+                evento = f"{nome} percebeu movimentação abafada além da área visível."
+        elif any(x in n for x in ("andar", "caminhar", "aproximar", "ir ate", "vou ate", "entrar", "seguir")):
+            narr = (
+                f"{nome} avança com cautela em direção a {local_nome}. "
+                "Ao se aproximar, o chão revela marcas mais nítidas e o ponto de entrada deixa de parecer apenas abandonado: "
+                "há sinais recentes de passagem e uma corrente de ar vindo de dentro."
+            )
+            evento = f"{nome} aproximou-se de {local_nome} e confirmou sinais recentes de passagem."
+        elif any(x in n for x in ("procurar", "buscar", "investigar", "inspecionar", "examinar", "analisar")):
+            prefixo = "Apesar da falha, " if teste and not sucesso else ""
+            narr = (
+                f"{prefixo}{nome} examina cuidadosamente os detalhes de {local_nome}. "
+                "A busca não resolve toda a situação, mas destaca uma pista concreta: marcas recentes interrompem "
+                "a camada de poeira em um ponto específico, indicando que algo foi movido ou passou por ali."
+            )
+            evento = f"{nome} investigou {local_nome} e identificou uma pista física recente."
+        elif any(x in n for x in ("chamar para briga", "chamar pra briga", "desafiar", "provocar", "lutar")):
+            narr = (
+                f"{nome} deixa claro que não pretende recuar diante de um possível adversário. "
+                "A provocação muda o clima da cena: quem estiver observando agora precisa decidir se responde, recua "
+                "ou tenta impedir que o confronto comece."
+            )
+            evento = f"{nome} provocou um possível confronto e alterou a tensão da cena."
+        else:
+            narr = (
+                f"{nome} age em {local_nome} e produz uma mudança perceptível na situação. "
+                f"A ação realizada foi: {texto}. O resultado foi {resultado_txt}; a atenção do grupo agora se volta "
+                "para o novo detalhe que surgiu no ambiente."
+            )
+            evento = f"{nome} realizou '{texto}' com {resultado_txt}, alterando a situação em {local_nome}."
+
+        novo_contexto = f"{contexto}\nEvento: {evento} Resultado mecânico: {resultado_txt}.".strip()
+        sugestoes = [
+            "Examinar a pista recém-percebida",
+            "Investigar a passagem ou origem dos sinais",
+            "Agir sobre o novo risco antes de continuar",
+        ]
+        return {"narrativa": narr, "novo_contexto": novo_contexto, "sugestoes": sugestoes}
+
     async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None, historico: list | None = None) -> dict:
+        historia = str(personagem.get("historia") or "").strip()
         prompt = (
             "Você é o Mestre de uma campanha de D&D. Resolva a ação do jogador como um acontecimento real "
             "dentro da cena, não como um comentário sobre a narrativa. Retorne JSON com as chaves "
             "'narrativa', 'novo_contexto' e 'sugestoes'. "
-            "A narrativa deve ter consequências concretas: alguém reage, uma pista aparece, uma porta muda de estado, "
-            "um NPC toma uma decisão, surge um risco, o grupo ganha acesso a algo ou uma situação muda de forma observável. "
-            "Use entidades que já existem no estado da aventura quando elas forem relevantes. "
-            "Se a ação for social, descreva a reação da pessoa abordada. Se for exploração, revele ou destaque um detalhe "
-            "específico do ambiente. Se houver teste, respeite exatamente sucesso ou falha fornecidos. "
-            "NUNCA responda apenas que 'a cena avança', 'algo acontece' ou que 'o narrador descreve'. "
-            "NÃO repita a mesma situação sem acrescentar um fato novo. O campo 'novo_contexto' deve registrar em uma frase "
-            "o fato novo que passou a ser verdadeiro na campanha, para que a próxima ação consiga continuar a partir dele. "
-            f"Contexto atual: {sessao.get('contexto', '')}. "
+            "A narrativa DEVE produzir uma consequência concreta e observável nesta rodada. "
+            "Pode ser uma reação de NPC, pista descoberta, mudança de posição, porta aberta/fechada, risco revelado, "
+            "informação obtida, recurso perdido ou ganho, ou outra alteração compatível com o estado. "
+            "Se a ação for social, descreva a reação de uma entidade existente. Se for exploração, revele um detalhe "
+            "específico do ambiente. Se houver teste, respeite EXATAMENTE o sucesso ou falha fornecidos. "
+            "Falha não significa ausência de narrativa: a tentativa deve produzir uma consequência compatível, sem transformar "
+            "falha em sucesso. NUNCA use frases como 'a cena avança', 'algo acontece', 'o narrador descreve' ou 'a aventura continua'. "
+            "NÃO repita a situação anterior sem acrescentar um fato novo. "
+            "O novo_contexto deve registrar explicitamente o novo fato verdadeiro após a ação. "
+            "Use somente entidades e fatos presentes no estado estruturado; não invente NPCs, itens ou locais para resolver uma ação. "
+            "O arquétipo do personagem deve influenciar a forma como ele percebe, reage e toma decisões, mas não deve criar bônus mecânicos inexistentes. "
+            f"Contexto atual: {str(sessao.get('contexto', '') or '')[:4000]}. "
             f"Estado estruturado da aventura: {json.dumps(sessao.get('aventura') or {}, ensure_ascii=False)}. "
-            f"Personagem ativo: {personagem.get('nome')} "
-            f"({personagem.get('classe')}, {personagem.get('raca')}). Ação: {acao}. "
-            f"Teste: {teste}. Jogadores presentes: {[p.get('nome') for p in (jogadores or [])]}. "
+            f"Personagem ativo: {personagem.get('nome')} ({personagem.get('classe')}, {personagem.get('raca')}). "
+            f"História/identidade do personagem: {historia[:4000]}. "
+            f"Ação: {acao}. Teste e resultado mecânico: {teste}. "
+            f"Jogadores presentes: {[p.get('nome') for p in (jogadores or [])]}. "
             f"Histórico recente: {(historico or [])[-10:]}. "
         )
         try:
             data = await self._request_json(prompt)
-            if isinstance(data, dict) and data.get("narrativa"):
-                novo_contexto = data.get("novo_contexto") or sessao.get("contexto", "")
-                sugestoes = data.get("sugestoes") or []
-                return {"narrativa": data["narrativa"], "novo_contexto": novo_contexto, "sugestoes": sugestoes}
+            if isinstance(data, dict):
+                return self._validar_narrativa(data, sessao.get("contexto", ""))
         except Exception as exc:
-            log.warning("IA indisponível para narrar ação; usando fallback offline: %s", exc)
+            log.warning("Resposta narrativa rejeitada ou IA indisponível; usando fallback determinístico: %s", exc)
 
-        contexto = sessao.get("contexto", "")
-        nome = personagem.get("nome", "O personagem")
-        texto = (acao or "").strip()
-        normalizado = self._normalizar_acao(texto)
-
-        # Fallback offline deve continuar a aventura, não repetir uma frase genérica.
-        if "entrar" in normalizado and ("cripta" in normalizado or "caverna" in normalizado or "torre" in normalizado):
-            narr = f"{nome} entra cuidadosamente no local. O ar muda assim que atravessa a passagem, e a entrada fica para trás enquanto os sons do lado de fora começam a desaparecer."
-            evento = f"{nome} entrou no local."
-        elif any(palavra in normalizado for palavra in ("procurar", "buscar", "investigar", "inspecionar", "analisar")):
-            narr = f"{nome} examina o ambiente em busca de algo fora do lugar. Entre marcas, objetos e detalhes aparentemente comuns, há sinais que podem revelar uma pista."
-            evento = f"{nome} procurou pistas no ambiente."
-        elif any(palavra in normalizado for palavra in ("olhar", "observar", "ver")):
-            narr = f"{nome} observa atentamente os arredores. A posição das entradas, os sons e os movimentos ao redor ficam mais claros."
-            evento = f"{nome} observou os arredores."
-        elif any(palavra in normalizado for palavra in ("falar", "perguntar", "dizer", "conversar")):
-            narr = f"{nome} inicia uma conversa e coloca sua intenção às claras. A reação de quem está por perto passa a fazer parte da cena."
-            evento = f"{nome} iniciou uma conversa."
-        else:
-            narr = f"{nome} realiza a ação: {texto}. A cena avança a partir dessa decisão."
-            evento = f"{nome} realizou a ação: {texto}."
-
-        resultado_txt = "teste bem-sucedido" if teste and teste.get("sucesso") else "teste falho" if teste else "sem teste"
-        novo_contexto = (
-            f"{contexto}\n"
-            f"Evento: {evento} Resultado: {resultado_txt}"
-        ).strip()
-
-        sugestoes = [
-            "Continuar explorando o local",
-            "Observar detalhes importantes da cena",
-            "Interagir com alguém ou alguma coisa presente",
-        ]
-        return {"narrativa": narr, "novo_contexto": novo_contexto, "sugestoes": sugestoes}
+        return self._fallback_narrativa(sessao, personagem, acao, teste)
 
     async def sugerir_acoes(self, sessao: dict, personagem: dict) -> dict:
         prompt = (
