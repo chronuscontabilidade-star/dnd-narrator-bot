@@ -171,6 +171,34 @@ class Database:
             )
             return cur.rowcount == 1
 
+    def atualizar_estado_campanha(
+        self,
+        chat_id: int,
+        novo_contexto: str,
+        aventura: dict,
+        contexto_anterior: str | None = None,
+    ) -> bool:
+        """Atualiza contexto + AdventureState no mesmo commit e com CAS."""
+        p = "%s" if self.backend == "postgres" else "?"
+        payload = json.dumps(aventura, ensure_ascii=False)
+        agora = datetime.now(timezone.utc).isoformat()
+        with self._conn() as conn:
+            if contexto_anterior is None:
+                cur = conn.execute(
+                    f"""UPDATE sessoes
+                        SET contexto={p}, aventura_json={p}, atualizada_em={p}
+                        WHERE chat_id={p}""",
+                    (novo_contexto, payload, agora, chat_id),
+                )
+            else:
+                cur = conn.execute(
+                    f"""UPDATE sessoes
+                        SET contexto={p}, aventura_json={p}, atualizada_em={p}
+                        WHERE chat_id={p} AND contexto={p}""",
+                    (novo_contexto, payload, agora, chat_id, contexto_anterior),
+                )
+            return cur.rowcount == 1
+
     def atualizar_contexto(self, chat_id: int, novo_contexto: str, contexto_anterior: str | None = None) -> bool:
         with self._conn() as conn:
             p = "%s" if self.backend == "postgres" else "?"
