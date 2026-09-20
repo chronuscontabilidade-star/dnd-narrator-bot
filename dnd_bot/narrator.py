@@ -124,10 +124,24 @@ class Narrator:
             from game.character_creation import gerar_atributos
 
         atributos = gerar_atributos(classe, raca)
-        hist = f"{nome} é um {classe.lower()} de {raca.lower()} que nasceu para seguir em direção ao desconhecido."
-        if detalhes and detalhes.strip().lower() not in {"nenhum", "nenhuma", "n/a", "nao", "não"}:
-            hist += f" Seus detalhes pessoais incluem: {detalhes.strip()}"
-        hist += " No momento, o personagem busca um propósito claro e enfrenta o mundo com coragem, disciplina e curiosidade."
+        conceito = (detalhes or "").strip()
+        sem_conceito = conceito.lower() in {"", "nenhum", "nenhuma", "n/a", "nao", "não"}
+        if sem_conceito:
+            hist = (
+                f"{nome} cresceu entre os seus como um {classe.lower()} de origem {raca.lower()}, "
+                "aprendendo cedo que sobreviver exige tanto coragem quanto escolhas difíceis. "
+                "Agora carrega perguntas que ainda não conseguiu responder e procura uma razão para "
+                "colocar suas habilidades a serviço de algo maior."
+            )
+        else:
+            hist = (
+                f"{nome} é um {classe.lower()} de origem {raca.lower()}, conhecido por viver segundo o seguinte "
+                f"arquétipo: {conceito}. Esse traço não é apenas uma característica: ele moldou suas escolhas, "
+                "sua maneira de enxergar outras pessoas e a forma como reage quando encontra perigo. "
+                f"Quando a aventura começa, {nome} já traz consigo esse passado e um objetivo ligado diretamente "
+                f"ao seu arquétipo: {conceito}. As primeiras decisões da jornada devem colocar essa identidade "
+                "à prova, em vez de deixá-la apenas como uma descrição de ficha."
+            )
         return {"atributos": atributos, "historia": hist}
 
 
@@ -301,14 +315,18 @@ class Narrator:
 
     async def criar_personagem(self, nome: str, classe: str, raca: str, detalhes: str = "") -> dict:
         prompt = (
-            "Crie somente a história de um personagem de D&D 5e 2014 em JSON com a chave 'historia'. "
+            "Crie somente uma história de personagem de D&D 5e 2014 em JSON com a chave 'historia'. "
             "Os atributos NÃO são definidos pela IA. Eles serão gerados separadamente pelo motor de regras "
             "usando 4d6, descartando o menor, seis vezes, e os bônus raciais oficiais. "
             "Não invente valores de atributos, bônus de classe ou regras fora de D&D 5e 2014. "
-            "A história deve parecer escrita especificamente para esse personagem: conecte raça, classe, "
-            "profissão, arquétipo, manias, medos, objetivos e demais detalhes fornecidos. "
-            "Não contradiga os detalhes do jogador e não invente raça ou classe diferente. "
-            f"Nome: {nome}. Raça: {raca}. Classe: {classe}. Conceito e detalhes: {detalhes or 'nenhum'}."
+            "O campo 'Conceito e detalhes' é o ARQUÉTIPO CENTRAL do personagem e é obrigatório para a história. "
+            "A história deve nascer desse arquétipo: mostre como ele moldou o passado, personalidade, hábitos, "
+            "medos, objetivos, relações e dilemas do personagem. Não basta repetir ou citar o arquétipo no final. "
+            "Transforme-o em acontecimentos concretos da vida do personagem e conecte-o organicamente à raça e classe. "
+            "Não contradiga os detalhes do jogador, não troque raça/classe e não invente fatos que anulem o conceito. "
+            "Escreva uma história com identidade suficiente para o Mestre conseguir usar o arquétipo durante a campanha. "
+            f"Nome: {nome}. Raça: {raca}. Classe: {classe}. CONCEITO E ARQUÉTIPO CENTRAL: {detalhes or 'nenhum'}. "
+            "Retorne somente JSON válido."
         )
         try:
             data = await self._request_json(prompt)
@@ -418,8 +436,17 @@ class Narrator:
 
     async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None, historico: list | None = None) -> dict:
         prompt = (
-            "Narre a ação de um personagem em D&D em português do Brasil. "
-            "Retorne JSON com chaves 'narrativa', 'novo_contexto' e 'sugestoes'. "
+            "Você é o Mestre de uma campanha de D&D. Resolva a ação do jogador como um acontecimento real "
+            "dentro da cena, não como um comentário sobre a narrativa. Retorne JSON com as chaves "
+            "'narrativa', 'novo_contexto' e 'sugestoes'. "
+            "A narrativa deve ter consequências concretas: alguém reage, uma pista aparece, uma porta muda de estado, "
+            "um NPC toma uma decisão, surge um risco, o grupo ganha acesso a algo ou uma situação muda de forma observável. "
+            "Use entidades que já existem no estado da aventura quando elas forem relevantes. "
+            "Se a ação for social, descreva a reação da pessoa abordada. Se for exploração, revele ou destaque um detalhe "
+            "específico do ambiente. Se houver teste, respeite exatamente sucesso ou falha fornecidos. "
+            "NUNCA responda apenas que 'a cena avança', 'algo acontece' ou que 'o narrador descreve'. "
+            "NÃO repita a mesma situação sem acrescentar um fato novo. O campo 'novo_contexto' deve registrar em uma frase "
+            "o fato novo que passou a ser verdadeiro na campanha, para que a próxima ação consiga continuar a partir dele. "
             f"Contexto atual: {sessao.get('contexto', '')}. "
             f"Estado estruturado da aventura: {json.dumps(sessao.get('aventura') or {}, ensure_ascii=False)}. "
             f"Personagem ativo: {personagem.get('nome')} "
