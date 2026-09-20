@@ -63,6 +63,42 @@ class NarratorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             state.complete_quest_step("q1", "s-inexistente")
 
+    def test_secret_reveal_updates_progress(self):
+        raw = {
+            "schema_version": 1,
+            "aventura": {"id": "a", "titulo": "A", "resumo": "R", "status": "em_andamento"},
+            "mundo": {}, "locais": [{"id": "inicio", "nome": "Inicio", "descoberto": True, "visitado": True, "conexoes": []}],
+            "npcs": [], "encounters": [], "quests": [], "itens": [],
+            "flags": {}, "segredos": [{"id": "seg1", "revelado": False}],
+            "progresso": {"local_atual": "inicio", "locais_descobertos": ["inicio"],
+                          "locais_visitados": ["inicio"], "npcs_conhecidos": [],
+                          "encounters_concluidos": [], "quests_concluidas": [], "eventos_importantes": []},
+        }
+        state = AdventureState.from_dict(raw).reveal_secret("seg1")
+        self.assertTrue(state.data["segredos"][0]["revelado"])
+        self.assertEqual(state.data["progresso"]["segredos_revelados"], ["seg1"])
+
+    def test_quest_steps_cannot_skip_previous_step(self):
+        raw = {
+            "schema_version": 1,
+            "aventura": {"id": "a", "titulo": "A", "resumo": "R", "status": "em_andamento"},
+            "mundo": {}, "locais": [{"id": "inicio", "nome": "Inicio", "descoberto": True, "visitado": True, "conexoes": []}],
+            "npcs": [], "encounters": [], "quests": [{
+                "id": "q1", "status": "ativa",
+                "etapas": [
+                    {"id": "s1", "status": "pendente"},
+                    {"id": "s2", "status": "pendente"},
+                ],
+            }],
+            "itens": [], "flags": {}, "segredos": [],
+            "progresso": {"local_atual": "inicio", "locais_descobertos": ["inicio"],
+                          "locais_visitados": ["inicio"], "npcs_conhecidos": [],
+                          "encounters_concluidos": [], "quests_concluidas": [], "eventos_importantes": []},
+        }
+        state = AdventureState.from_dict(raw)
+        with self.assertRaises(ValueError):
+            state.complete_quest_step("q1", "s2")
+
     def test_adventure_generation_prompt_defines_stable_contract(self):
         prompt = adventure_generation_prompt()
         self.assertIn('"schema_version": 1', prompt)
