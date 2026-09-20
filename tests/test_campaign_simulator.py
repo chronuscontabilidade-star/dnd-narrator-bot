@@ -160,6 +160,33 @@ class CampaignSimulatorTests(unittest.TestCase):
         )
 
 
+    def test_party_decision_rejects_duplicate_voter(self):
+        decision = PartyDecision(
+            id="decisao-duplicada",
+            prompt="O que fazer?",
+            options=("Investigar", "Sair"),
+            reason="Teste",
+        )
+        with self.assertRaises(ValueError):
+            PartyDecisionResolver().resolve(
+                decision,
+                (
+                    PartyVote("lia", "Investigar"),
+                    PartyVote("lia", "Sair"),
+                ),
+            )
+
+    def test_participation_rejects_duplicate_player(self):
+        with self.assertRaises(ValueError):
+            PartyParticipationResolver().resolve(
+                "decisao-1",
+                "Investigar",
+                (
+                    PartyParticipation("lia", "Investigar", True),
+                    PartyParticipation("lia", "Investigar", False),
+                ),
+            )
+
     def test_party_decision_requires_absolute_majority(self):
         decision = PartyDecision(
             id="decisao-1",
