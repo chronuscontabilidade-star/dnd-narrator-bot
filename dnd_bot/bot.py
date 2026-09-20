@@ -17,6 +17,7 @@ try:
     from .game.action import ActionResolver, movimento_permitido, normalize
     from .game.adventure import AdventureState
     from .game.combat import CombatState
+    from .game.combat_flow import run_enemy_turns, start_pending_combat
 except ImportError:
     from database import Database
     from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
@@ -24,6 +25,7 @@ except ImportError:
     from game.action import ActionResolver, movimento_permitido, normalize
     from game.adventure import AdventureState
     from game.combat import CombatState
+    from game.combat_flow import run_enemy_turns, start_pending_combat
 
 load_dotenv()
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
@@ -439,11 +441,13 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             combate = None
 
         if combate is None or not combate.started:
-            await update.message.reply_text(
-                "⚔️ Não há combate ativo. O ataque só pode ser resolvido pelo motor "
-                "quando um encontro de combate estiver iniciado."
-            )
-            return
+            jogadores = db.listar_jogadores(chat_id)
+            combate, _ = start_pending_combat(aventura_atual, jogadores)
+            if combate is None or not combate.started:
+                await update.message.reply_text(
+                    "⚔️ Não há combate ativo nem encontro de combate pendente neste local."
+                )
+                return
 
         atacante = next((c for c in combate.combatants if c.name == p["nome"] and c.is_player), None)
         alvo_nome = intent.alvo
@@ -479,8 +483,18 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "hp_alvo": alvo.hp,
         }
         aventura_atual = dict(aventura_atual)
-        aventura_atual["combate"] = combate.to_dict()
-        # O narrador recebe o mesmo snapshot mecânico que será persistido.
+        raw_combate = combate.to_dict()
+        raw_combate["encounter_id"] = (aventura_atual.get("combate") or {}).get("encounter_id")
+        aventura_atual["combate"] = raw_combate
+        if combate.finished:
+            encounter_id = raw_combate.get("encounter_id")
+            if encounter_id:
+                try:
+                    aventura_atual = AdventureState.from_dict(aventura_atual).complete_encounter(encounter_id).to_dict()
+                except ValueError:
+                    pass
+            aventura_atual.pop("combate", None)
+        sessao_atual = dict(sessao)
         sessao_atual["aventura"] = aventura_atual
         await update.message.reply_text(
             f"⚔️ {'CRÍTICO' if resultado_ataque.critical else 'ACERTO' if resultado_ataque.hit else 'FALHA'} "
