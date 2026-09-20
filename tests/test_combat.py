@@ -151,8 +151,8 @@ class CombatTests(unittest.TestCase):
         self.assertTrue(combat.finished)
 
     def test_finished_combat_rejects_new_actions(self):
-        hero = Combatant("Heroi", 10, 10, 1, is_player=True)
-        goblin = Combatant("Goblin", 10, 1, 0, position=(1, 0))
+        hero = Combatant("Heroi", 10, 10, 10, is_player=True)
+        goblin = Combatant("Goblin", 10, 1, 1, position=(1, 0))
         combat = CombatState([hero, goblin])
         combat.start(FixedRng([10, 10]))
         goblin.take_damage(1)
