@@ -505,7 +505,7 @@ class Narrator:
             sugestoes = ["Continuar o combate", "Mudar de posição", "Encerrar o turno"]
 
         # Ações específicas consomem a pista anterior em vez de recomeçar a cena.
-        if any(x in n for x in ("rastrear", "seguir pegadas", "seguir as pegadas")):
+        elif any(x in n for x in ("rastrear", "seguir pegadas", "seguir as pegadas")):
             narr = (
                 f"{nome} acompanha as pegadas sem perder o rastro. Elas atravessam a área externa "
                 "e terminam junto ao acesso do local, onde a poeira foi removida recentemente. "
