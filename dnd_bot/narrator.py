@@ -262,6 +262,7 @@ class Narrator:
             local_inicial=seed["titulo"],
             narrativa_inicial=seed["narrativa"],
         )
+        fallback["titulo"] = fallback["aventura"]["titulo"]
         fallback["narrativa"] = seed["narrativa"]
         fallback["contexto"] = seed["contexto"]
         return fallback
