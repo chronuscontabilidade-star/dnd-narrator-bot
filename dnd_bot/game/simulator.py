@@ -637,10 +637,11 @@ class CampaignSimulator:
             visited_location=destination,
         )
 
-        if destination == "beco":
-            state = state.complete_quest_step("quest_cinzas", "descobrir_beco")
-        elif destination == "cripta":
-            state = state.complete_quest_step("quest_cinzas", "entrar_cripta")
+        state = self._complete_matching_quest_step(
+            state,
+            target_type="local",
+            target_id=destination,
+        )
 
         report.events.append(f"movimento:{destination}")
         return state
@@ -765,8 +766,39 @@ class CampaignSimulator:
             description="O encontro de teste foi concluído.",
         )
         state = state.complete_encounter(encounter_id)
-        if encounter_id == "encontro_guardiao":
-            state = state.complete_quest_step("quest_cinzas", "derrotar_guardiao")
+        state = self._complete_matching_quest_step(
+            state,
+            target_type="encounter",
+            target_id=encounter_id,
+        )
+        return state
+
+    def _complete_matching_quest_step(
+        self,
+        state: AdventureState,
+        *,
+        target_type: str,
+        target_id: str,
+    ) -> AdventureState:
+        """Conclui a primeira etapa pendente cujo alvo foi realmente alcançado."""
+        for quest in state.data.get("quests", []):
+            if quest.get("status") == "concluida":
+                continue
+            for step in quest.get("etapas", []):
+                if step.get("status") == "concluida":
+                    continue
+                target = step.get("alvo") or {}
+                if target.get("tipo") == target_type and target.get("id") == target_id:
+                    return state.complete_quest_step(
+                        quest.get("id"),
+                        step.get("id"),
+                    )
+                if target_type == "local" and step.get("local_objetivo") == target_id:
+                    return state.complete_quest_step(
+                        quest.get("id"),
+                        step.get("id"),
+                    )
+                break
         return state
 
 def build_vertical_slice_adventure() -> AdventureState:
