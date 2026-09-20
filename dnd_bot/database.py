@@ -67,6 +67,10 @@ class Database:
                     atributos   TEXT    NOT NULL,  -- JSON
                     historia    TEXT    NOT NULL,
                     detalhes    TEXT    NOT NULL DEFAULT '',
+                    nivel       INTEGER NOT NULL DEFAULT 1,
+                    hp_max      INTEGER NOT NULL DEFAULT 1,
+                    hp          INTEGER NOT NULL DEFAULT 1,
+                    ca          INTEGER NOT NULL DEFAULT 10,
                     criado_em   TEXT    NOT NULL,
                     UNIQUE(user_id, chat_id)
                 );
@@ -101,10 +105,22 @@ class Database:
             if self.backend == "postgres":
                 conn.execute("ALTER TABLE sessoes ADD COLUMN IF NOT EXISTS aventura_json TEXT NOT NULL DEFAULT ''")
                 conn.execute("ALTER TABLE personagens ADD COLUMN IF NOT EXISTS detalhes TEXT NOT NULL DEFAULT ''")
+                conn.execute("ALTER TABLE personagens ADD COLUMN IF NOT EXISTS nivel INTEGER NOT NULL DEFAULT 1")
+                conn.execute("ALTER TABLE personagens ADD COLUMN IF NOT EXISTS hp_max INTEGER NOT NULL DEFAULT 1")
+                conn.execute("ALTER TABLE personagens ADD COLUMN IF NOT EXISTS hp INTEGER NOT NULL DEFAULT 1")
+                conn.execute("ALTER TABLE personagens ADD COLUMN IF NOT EXISTS ca INTEGER NOT NULL DEFAULT 10")
             else:
                 columns = {row[1] for row in conn.execute("PRAGMA table_info(personagens)").fetchall()}
                 if "detalhes" not in columns:
                     conn.execute("ALTER TABLE personagens ADD COLUMN detalhes TEXT NOT NULL DEFAULT ''")
+                if "nivel" not in columns:
+                    conn.execute("ALTER TABLE personagens ADD COLUMN nivel INTEGER NOT NULL DEFAULT 1")
+                if "hp_max" not in columns:
+                    conn.execute("ALTER TABLE personagens ADD COLUMN hp_max INTEGER NOT NULL DEFAULT 1")
+                if "hp" not in columns:
+                    conn.execute("ALTER TABLE personagens ADD COLUMN hp INTEGER NOT NULL DEFAULT 1")
+                if "ca" not in columns:
+                    conn.execute("ALTER TABLE personagens ADD COLUMN ca INTEGER NOT NULL DEFAULT 10")
                 session_columns = {row[1] for row in conn.execute("PRAGMA table_info(sessoes)").fetchall()}
                 if "aventura_json" not in session_columns:
                     conn.execute("ALTER TABLE sessoes ADD COLUMN aventura_json TEXT NOT NULL DEFAULT ''")
@@ -221,22 +237,25 @@ class Database:
     def salvar_personagem(
         self, user_id: int, chat_id: int,
         nome: str, classe: str, raca: str,
-        atributos: dict, historia: str, detalhes: str = ""
+        atributos: dict, historia: str, detalhes: str = "",
+        nivel: int = 1, hp_max: int = 1, hp: int = 1, ca: int = 10
     ):
         with self._conn() as conn:
             p = "%s" if self.backend == "postgres" else "?"
             conn.execute(f"""
                 INSERT INTO personagens
-                    (user_id, chat_id, nome, classe, raca, atributos, historia, detalhes, criado_em)
-                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    (user_id, chat_id, nome, classe, raca, atributos, historia, detalhes, nivel, hp_max, hp, ca, criado_em)
+                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
                 ON CONFLICT(user_id, chat_id) DO UPDATE SET
                     nome=excluded.nome, classe=excluded.classe,
                     raca=excluded.raca, atributos=excluded.atributos,
-                    historia=excluded.historia, detalhes=excluded.detalhes
+                    historia=excluded.historia, detalhes=excluded.detalhes,
+                    nivel=excluded.nivel, hp_max=excluded.hp_max, hp=excluded.hp, ca=excluded.ca
             """, (
                 user_id, chat_id, nome, classe, raca,
                 json.dumps(atributos, ensure_ascii=False),
-                historia, detalhes[:4000], datetime.now(timezone.utc).isoformat()
+                historia, detalhes[:4000], nivel, hp_max, hp, ca,
+                datetime.now(timezone.utc).isoformat()
             ))
 
     def obter_personagem(self, user_id: int, chat_id: int) -> dict | None:
