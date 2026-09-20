@@ -14,9 +14,9 @@ def combatant_from_player_record(player: dict) -> Combatant:
     con_mod = ability_modifier(con)
     return Combatant(
         name=player["nome"],
-        armor_class=max(1, 10 + ability_modifier(dex)),
-        max_hp=max(1, 10 + con_mod),
-        hp=max(1, 10 + con_mod),
+        armor_class=max(1, int(player.get("ca", 10 + ability_modifier(dex)))),
+        max_hp=max(1, int(player.get("hp_max", 10 + con_mod))),
+        hp=max(0, min(int(player.get("hp", player.get("hp_max", 10 + con_mod))), int(player.get("hp_max", 10 + con_mod)))),
         dexterity=dex,
         attack_bonus=2 + ability_modifier(strength),
         damage_dice="1d6",
