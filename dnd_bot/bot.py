@@ -480,6 +480,8 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         }
         aventura_atual = dict(aventura_atual)
         aventura_atual["combate"] = combate.to_dict()
+        # O narrador recebe o mesmo snapshot mecânico que será persistido.
+        sessao_atual["aventura"] = aventura_atual
         await update.message.reply_text(
             f"⚔️ {'CRÍTICO' if resultado_ataque.critical else 'ACERTO' if resultado_ataque.hit else 'FALHA'} "
             f"| {resultado_ataque.roll.total} vs CA {resultado_ataque.armor_class}"
