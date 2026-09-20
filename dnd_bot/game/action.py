@@ -105,8 +105,8 @@ class ActionResolver:
 
         # Movimento explícito. Entrar/ir por uma passagem livre não é teste.
         movement_words = (
-            "entrar", "entra", "entro", "ir para", "vou para", "ir ate",
-            "vou ate", "seguir para", "seguir ate", "voltar para", "sair",
+            "entrar", "entra", "entro", "ir para", "vou para", "ir pra", "vou pra", "ir ate",
+            "vou ate", "seguir para", "seguir pra", "seguir ate", "voltar para", "voltar pra", "sair",
             "caminhar para", "andar para", "aproximar",
         )
         if any(word in n for word in movement_words):
