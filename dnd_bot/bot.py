@@ -75,23 +75,6 @@ def _resolver_combate_aventura(aventura: dict) -> CombatState | None:
     return CombatState.from_dict(raw)
 
 
-def _resultado_ataque_texto(resultado) -> str:
-    """Mensagem mecânica curta, independente da narrativa da IA."""
-    if resultado.critical:
-        tipo = "CRÍTICO"
-    elif resultado.fumble:
-        tipo = "FALHA CRÍTICA"
-    elif resultado.hit:
-        tipo = "ACERTO"
-    else:
-        tipo = "ERRO"
-    dano = f" Dano: {resultado.damage}." if resultado.hit else ""
-    return (
-        f"⚔️ {tipo}: {resultado.attacker} contra {resultado.target}. "
-        f"Rolagem {resultado.roll.total} vs CA {resultado.armor_class}.{dano} "
-        f"HP restante do alvo: {next((c.hp for c in getattr(resultado, '_combatants', []) if c.name == resultado.target), '?')}."
-    )
-
 def teclado_nomes(opcoes):
     return ReplyKeyboardMarkup(
         [[nome] for nome in opcoes],
