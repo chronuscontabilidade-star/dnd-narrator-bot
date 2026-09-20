@@ -7,6 +7,7 @@ from dnd_bot.database import Database
 from dnd_bot.game.adventure import AdventureState, SCHEMA_VERSION, adventure_generation_prompt
 from dnd_bot.dice import realizar_teste
 from dnd_bot.narrator import Narrator
+from dnd_bot.bot import _movimento_permitido
 
 
 class NarratorTests(unittest.TestCase):
@@ -108,6 +109,24 @@ class NarratorTests(unittest.TestCase):
         }
         with self.assertRaises(ValueError):
             AdventureState.from_dict(raw)
+
+    def test_movement_does_not_teleport_to_discovered_location(self):
+        raw = {
+            "schema_version": 1,
+            "aventura": {"id": "a", "titulo": "A", "resumo": "R", "status": "em_andamento"},
+            "mundo": {}, "locais": [
+                {"id": "inicio", "nome": "Inicio", "descoberto": True, "visitado": True, "conexoes": ["sala"]},
+                {"id": "sala", "nome": "Sala", "descoberto": True, "visitado": True, "conexoes": ["inicio"]},
+                {"id": "longe", "nome": "Longe", "descoberto": True, "visitado": True, "conexoes": []},
+            ],
+            "npcs": [], "encounters": [], "quests": [], "itens": [], "flags": {}, "segredos": [],
+            "progresso": {"local_atual": "inicio", "locais_descobertos": ["inicio", "sala", "longe"],
+                          "locais_visitados": ["inicio", "sala", "longe"], "npcs_conhecidos": [],
+                          "encounters_concluidos": [], "quests_concluidas": [], "eventos_importantes": []},
+        }
+        state = AdventureState.from_dict(raw)
+        self.assertTrue(_movimento_permitido(state, "sala"))
+        self.assertFalse(_movimento_permitido(state, "longe"))
 
     def test_adventure_generation_prompt_defines_stable_contract(self):
         prompt = adventure_generation_prompt()
