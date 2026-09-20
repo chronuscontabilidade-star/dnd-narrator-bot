@@ -433,7 +433,43 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # uma ação rotineira em rolagem arbitrariamente.
     teste = None
     combate = None
-    if intent.tipo == "ataque":
+    if intent.tipo == "fim_turno":
+        combate = _resolver_combate_aventura(aventura_atual) if aventura_atual.get("combate") else None
+        if combate is None or not combate.started:
+            await update.message.reply_text("⚔️ Não há combate ativo.")
+            return
+        atacante = next((c for c in combate.combatants if c.name == p["nome"] and c.is_player), None)
+        if atacante is None:
+            await update.message.reply_text("⚔️ Seu personagem não está presente no combate ativo.")
+            return
+        try:
+            proximo = combate.end_turn(atacante)
+        except (RuntimeError, ValueError) as exc:
+            await update.message.reply_text(f"⚔️ Não foi possível encerrar o turno: {exc}")
+            return
+
+        inimigo_resultados = run_enemy_turns(combate)
+        raw_combate = combate.to_dict()
+        raw_combate["encounter_id"] = (aventura_atual.get("combate") or {}).get("encounter_id")
+        aventura_atual = dict(aventura_atual)
+        aventura_atual["combate"] = raw_combate
+        if combate.finished:
+            encounter_id = raw_combate.get("encounter_id")
+            if encounter_id:
+                try:
+                    aventura_atual = AdventureState.from_dict(aventura_atual).complete_encounter(encounter_id).to_dict()
+                except ValueError:
+                    pass
+            aventura_atual.pop("combate", None)
+
+        linhas = [f"⏳ Turno encerrado. Agora é a vez de {proximo.name}."]
+        for item in inimigo_resultados:
+            status = "acertou" if item["acertou"] else "errou"
+            detalhe = f", causando {item['dano']} de dano." if item["acertou"] else "."
+            linhas.append(f"⚔️ {item['inimigo']} {status} {item['alvo']}{detalhe}")
+        await update.message.reply_text("\n".join(linhas))
+        teste = {"tipo": "turno", "sucesso": True}
+    elif intent.tipo == "ataque":
         try:
             combate = _resolver_combate_aventura(aventura_atual)
         except (ValueError, TypeError, KeyError) as exc:
@@ -516,6 +552,7 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     jogadores = db.listar_jogadores(chat_id)
     sessao_atual = db.obter_sessao(chat_id) or sessao
+    sessao_atual["aventura"] = aventura_atual
     historico = db.historico_recente(chat_id, limite=10)
 
     resultado = await narrator.narrar_acao_com_dado(
