@@ -35,6 +35,7 @@ class AdventureValidator:
         quest_ids = self._unique_ids(quests, "quest", issues)
         item_ids = self._unique_ids(items, "item", issues)
         secret_ids = self._unique_ids(secrets, "segredo", issues)
+        flags = data.get("flags", {})
 
         current = progress.get("local_atual")
         if current not in location_ids:
@@ -244,10 +245,11 @@ class AdventureValidator:
                 "segredo": secret_ids,
             }
             if target_type == "flag":
-                if not target_id:
+                if not target_id or target_id not in flags:
                     issues.append(ValidationIssue(
-                        "invalid_quest_target",
-                        f"Quest {quest_id}, etapa {first_pending.get('id')} possui flag sem id.",
+                        "broken_quest_target",
+                        f"Quest {quest_id}, etapa {first_pending.get('id')} referencia "
+                        f"flag inexistente: {target_id}",
                     ))
                 continue
 
