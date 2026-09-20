@@ -14,10 +14,10 @@ from database import Database
 from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
 from narrator import Narrator
 try:
-    from .game.action import ActionResolver
+    from .game.action import ActionResolver, movimento_permitido
     from .game.adventure import AdventureState
 except ImportError:
-    from game.action import ActionResolver
+    from game.action import ActionResolver, movimento_permitido
     from game.adventure import AdventureState
 
 load_dotenv()
@@ -357,18 +357,6 @@ async def cmd_nova_aventura(update, ctx):
     )
 
 
-def _movimento_permitido(estado: AdventureState, destino_id: str) -> bool:
-    """Retorna se o destino é o local atual ou uma conexão direta."""
-    progresso = estado.data.get("progresso", {})
-    local_atual = progresso.get("local_atual")
-    locais = estado.data.get("locais", [])
-    atual = next((local for local in locais if local.get("id") == local_atual), None)
-    destino = next((local for local in locais if local.get("id") == destino_id), None)
-    if not atual or not destino:
-        return False
-    return destino_id == local_atual or destino_id in atual.get("conexoes", [])
-
-
 # ─── /acao — intenção determinística + narrativa ─────────────────────────────
 
 async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -428,7 +416,7 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if intent.tipo == "movimento" and intent.destino:
             locais = estado.data.get("locais", [])
             destino = next((l for l in locais if l.get("id") == intent.destino), None)
-            if destino and _movimento_permitido(estado, destino["id"]):
+            if destino and movimento_permitido(estado.to_dict(), destino["id"]):
                 estado = estado.update_progress(
                     current_location=destino["id"],
                     discovered_location=destino["id"],
