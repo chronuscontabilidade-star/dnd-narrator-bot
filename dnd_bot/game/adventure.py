@@ -109,7 +109,6 @@ class AdventureState:
                 secret["revelado"] = True
                 return AdventureState.from_dict(data)
         raise ValueError(f"Segredo inexistente: {secret_id}")
-        return AdventureState.from_dict(data)
 
     def complete_encounter(self, encounter_id: str) -> "AdventureState":
         data = self.to_dict()
@@ -143,6 +142,10 @@ class AdventureState:
                 completed = data["progresso"].setdefault("quests_concluidas", [])
                 if quest_id not in completed:
                     completed.append(quest_id)
+        if not quest_found:
+            raise ValueError(f"Quest inexistente: {quest_id}")
+        if not step_found:
+            raise ValueError(f"Etapa inexistente: {step_id}")
         return AdventureState.from_dict(data)
 
 
