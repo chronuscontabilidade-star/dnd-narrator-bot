@@ -39,6 +39,30 @@ class NarratorTests(unittest.TestCase):
         self.assertIn("cripta", state.data["progresso"]["locais_descobertos"])
         self.assertTrue(next(x for x in state.data["locais"] if x["id"] == "cripta")["visitado"])
 
+    def test_adventure_state_rejects_unknown_references(self):
+        raw = {
+            "schema_version": 1,
+            "aventura": {"id": "a", "titulo": "A", "resumo": "R", "status": "em_andamento"},
+            "mundo": {}, "locais": [{"id": "inicio", "nome": "Inicio", "descoberto": True, "visitado": True, "conexoes": []}],
+            "npcs": [], "encounters": [{"id": "enc1", "status": "pendente"}],
+            "quests": [{"id": "q1", "status": "ativa", "etapas": [{"id": "s1", "status": "pendente"}]}],
+            "itens": [], "flags": {}, "segredos": [{"id": "seg1", "revelado": False}],
+            "progresso": {"local_atual": "inicio", "locais_descobertos": ["inicio"],
+                          "locais_visitados": ["inicio"], "npcs_conhecidos": [],
+                          "encounters_concluidos": [], "quests_concluidas": [], "eventos_importantes": []},
+        }
+        state = AdventureState.from_dict(raw)
+        with self.assertRaises(ValueError):
+            state.update_progress(current_location="fantasma")
+        with self.assertRaises(ValueError):
+            state.reveal_secret("seg-inexistente")
+        with self.assertRaises(ValueError):
+            state.complete_encounter("enc-inexistente")
+        with self.assertRaises(ValueError):
+            state.complete_quest_step("q-inexistente", "s1")
+        with self.assertRaises(ValueError):
+            state.complete_quest_step("q1", "s-inexistente")
+
     def test_adventure_generation_prompt_defines_stable_contract(self):
         prompt = adventure_generation_prompt()
         self.assertIn('"schema_version": 1', prompt)
