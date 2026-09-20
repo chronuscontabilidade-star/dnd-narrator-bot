@@ -629,6 +629,81 @@ class Narrator:
         ).strip()
         return {"narrativa": narr, "novo_contexto": novo_contexto, "sugestoes": sugestoes}
 
+
+    @staticmethod
+    def _validar_intencao_semantica(data: dict, aventura: dict) -> dict:
+        """Valida a classificação semântica sem dar autoridade mecânica à IA."""
+        if not isinstance(data, dict):
+            raise ValueError("Intenção semântica inválida")
+        tipos = {
+            "movimento", "percepcao", "investigacao", "obstaculo",
+            "ferramentas", "furtividade", "furto", "social",
+            "ataque", "narrativa", "fim_turno",
+        }
+        tipo = str(data.get("tipo") or "").strip().lower()
+        if tipo not in tipos:
+            raise ValueError("Tipo de intenção não permitido")
+
+        destino = data.get("destino")
+        if destino is not None:
+            destino = str(destino).strip() or None
+            ids = {str(local.get("id")) for local in (aventura.get("locais") or [])}
+            if destino not in ids:
+                destino = None
+
+        habilidade = data.get("habilidade")
+        if habilidade not in {
+            "Acrobacia", "Adestrar Animais", "Arcanismo", "Atletismo",
+            "Atuação", "Enganação", "Furtividade", "História", "Intuição",
+            "Intimidação", "Investigação", "Medicina", "Natureza",
+            "Percepção", "Persuasão", "Prestidigitação", "Religião",
+            "Sobrevivência",
+        }:
+            habilidade = None
+
+        return {
+            "tipo": tipo,
+            "alvo": str(data.get("alvo")).strip()[:120] if data.get("alvo") else None,
+            "destino": destino,
+            "habilidade": habilidade,
+            "referencia": str(data.get("referencia") or "").strip()[:160],
+        }
+
+    async def interpretar_acao(self, sessao: dict, personagem: dict, acao: str) -> dict | None:
+        """Traduz linguagem livre em intenção; não resolve nenhuma regra do jogo."""
+        aventura = sessao.get("aventura") or {}
+        locais = [
+            {"id": local.get("id"), "nome": local.get("nome"), "descoberto": local.get("descoberto", False)}
+            for local in aventura.get("locais", [])
+        ]
+        prompt = (
+            "Você é um classificador de intenção para um jogo de D&D 5e. "
+            "Sua única função é entender o que o jogador quis tentar fazer. "
+            "NÃO narre, NÃO role dados, NÃO escolha CD, NÃO cause dano, NÃO invente locais, "
+            "NPCs, itens ou consequências. Retorne SOMENTE JSON válido. "
+            "Escolha exatamente um tipo entre: movimento, percepcao, investigacao, obstaculo, "
+            "ferramentas, furtividade, furto, social, ataque, narrativa, fim_turno. "
+            "Se a frase indicar deslocamento, prefira movimento mesmo que contenha palavras como "
+            "procurar, buscar, olhar ou investigar. 'Vou seguir o caminho das pegadas' é movimento "
+            "se o objetivo principal for avançar pelo caminho. "
+            "Para movimento, destino deve ser o ID de um local da lista somente quando o jogador "
+            "nomear claramente esse local. Caso contrário, use destino null e coloque a referência "
+            "linguística em referencia. "
+            "Para social, habilidade pode ser Persuasão, Enganação ou Intimidação. "
+            "Para as demais intenções, habilidade pode ser omitida. "
+            f"Locais conhecidos: {json.dumps(locais, ensure_ascii=False)}. "
+            f"Local atual: {(aventura.get('progresso') or {}).get('local_atual')}. "
+            f"Objetivos/quests: {json.dumps(aventura.get('quests') or [], ensure_ascii=False)[:5000]}. "
+            f"Personagem: {personagem.get('nome')} ({personagem.get('classe')}, {personagem.get('raca')}). "
+            f"Ação do jogador: {acao}"
+        )
+        try:
+            data = await self._request_json(prompt)
+            return self._validar_intencao_semantica(data, aventura)
+        except Exception as exc:
+            log.info("Classificador semântico indisponível; mantendo resolver determinístico: %s", exc)
+            return None
+
     async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None, historico: list | None = None) -> dict:
         historia = str(personagem.get("historia") or "").strip()
         prompt = (
