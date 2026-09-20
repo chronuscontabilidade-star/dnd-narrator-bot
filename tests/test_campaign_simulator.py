@@ -306,7 +306,7 @@ class CampaignSimulatorTests(unittest.TestCase):
             max_rounds=10,
         )
 
-        self.assertGreaterEqual(result.report.participation_rounds, 1)
+        self.assertGreaterEqual(result.report.participation_rounds, 1, result.report.events)
         self.assertGreaterEqual(result.report.participants, 1)
         self.assertGreaterEqual(result.report.individual_results, 1)
         self.assertTrue(
