@@ -92,7 +92,6 @@ class Narrator:
             raise
 
     def _offline_scene_seed(self, chat_id: int) -> dict:
-        seed = (chat_id if chat_id else 1) % 4
         templates = [
             {
                 "titulo": "As Cinzas do Farol Antigo",
@@ -115,7 +114,9 @@ class Narrator:
                 "contexto": "Localização: Templo do Vento Silencioso. Ameaça: ventos encantados e guardianas anciãs. Objetivo: entrar no templo e revelar a verdade sobre o sussurro do vento.",
             },
         ]
-        return templates[seed]
+        # O fallback não pode depender do chat_id. Isso fazia a mesma campanha
+        # reaparecer sempre que a IA estivesse indisponível.
+        return random.SystemRandom().choice(templates)
 
     def _offline_personagem(self, nome: str, classe: str, raca: str, detalhes: str = "") -> dict:
         try:
@@ -467,7 +468,7 @@ class Narrator:
         }
 
     def _fallback_narrativa(self, sessao: dict, personagem: dict, acao: str, teste: dict | None) -> dict:
-        """Narrador determinístico de emergência: sempre produz uma consequência concreta."""
+        """Narrador offline com progressão de cena baseada no estado persistido."""
         contexto = str(sessao.get("contexto", "") or "").strip()
         aventura = sessao.get("aventura") or {}
         progresso = aventura.get("progresso") or {}
@@ -475,74 +476,99 @@ class Narrator:
         local_id = progresso.get("local_atual")
         local = next((x for x in locais if x.get("id") == local_id), None)
         local_nome = (local or {}).get("nome") or "o local atual"
-        local_desc = (local or {}).get("descricao") or contexto
         nome = personagem.get("nome", "O personagem")
-        historia = str(personagem.get("historia") or "")
         texto = (acao or "").strip()
         n = self._normalizar_acao(texto)
         sucesso = bool(teste and teste.get("sucesso"))
         resultado_txt = "sucesso" if teste and sucesso else "falha" if teste else "sem teste"
+        eventos = progresso.get("eventos_importantes") or []
+        etapa = int(progresso.get("etapa_cena", 0) or 0)
 
-        if any(x in n for x in ("olhar", "observar", "ver", "olho ao redor")):
+        # Ações específicas consomem a pista anterior em vez de recomeçar a cena.
+        if any(x in n for x in ("rastrear", "seguir pegadas", "seguir as pegadas")):
             narr = (
-                f"{nome} para por um instante e examina {local_nome} com atenção. "
-                f"{local_desc[:260]} "
-                "Entre os detalhes mais fáceis de ignorar, há uma diferença importante: "
-                "algumas marcas no chão são recentes e terminam perto de uma passagem, como se alguém tivesse parado ali."
+                f"{nome} acompanha as pegadas sem perder o rastro. Elas atravessam a área externa "
+                "e terminam junto ao acesso do local, onde a poeira foi removida recentemente. "
+                "A pista deixa de ser apenas uma suspeita: alguém entrou por ali há pouco tempo."
             )
-            evento = f"{nome} examinou {local_nome} e identificou marcas recentes próximas a uma passagem."
-        elif any(x in n for x in ("ouvir", "escutar", "detectar", "perceber")):
-            if teste and not sucesso:
+            evento = f"{nome} rastreou as pegadas e confirmou uma passagem recente pelo acesso."
+            sugestoes = ["Entrar pela passagem", "Examinar o ponto onde as pegadas terminam", "Procurar sinais de quem passou por ali"]
+        elif any(x in n for x in ("examinar", "investigar", "procurar", "buscar pistas", "inspecionar", "analisar")):
+            if local_id == "area_interna" or etapa >= 2:
                 narr = (
-                    f"{nome} força a audição contra o ruído ao redor, mas a tentativa não produz uma certeza. "
-                    "A tempestade e os sons do ambiente mascaram qualquer presença, e ele não consegue determinar "
-                    "se há alguém escondido. Ainda assim, o silêncio entre uma rajada e outra revela que algo no local "
-                    "não combina com o restante da cena."
+                    f"{nome} examina {local_nome} com mais cuidado. Atrás da camada de poeira, "
+                    "surge uma escada estreita descendo para uma área mais profunda. O ar que sobe dali "
+                    "é mais frio, e pequenas marcas recentes continuam pelos degraus."
                 )
-                evento = f"{nome} falhou em detectar uma presença, mas percebeu uma anomalia sonora no ambiente."
+                evento = f"{nome} descobriu uma escada que leva da área interna para uma área mais profunda."
+                sugestoes = ["Descer pela escada", "Examinar as marcas nos degraus", "Esperar e observar antes de descer"]
+            else:
+                prefixo = "Apesar da falha, " if teste and not sucesso else ""
+                narr = (
+                    f"{prefixo}{nome} examina cuidadosamente a região. A poeira interrompida revela "
+                    "uma sequência de marcas recentes que passa pelo acesso e desaparece na área interna. "
+                    "Agora existe uma direção concreta para seguir."
+                )
+                evento = f"{nome} examinou a pista e identificou a rota para a área interna."
+                sugestoes = ["Entrar na área interna", "Seguir as marcas", "Examinar o acesso antes de entrar"]
+        elif any(x in n for x in ("entrar", "acessar a parte interna", "acessar", "ir ate", "vou ate", "ir pra", "vou pra", "seguir para", "seguir pra")):
+            if local_id == "area_interna":
+                narr = (
+                    f"{nome} já está dentro de {local_nome}. A passagem para a parte mais profunda "
+                    "fica claramente visível agora, e os sinais recentes continuam por ela."
+                )
+                evento = f"{nome} confirmou a passagem da área interna para a área profunda."
+                sugestoes = ["Seguir para a área profunda", "Examinar a passagem", "Ouvir antes de avançar"]
             else:
                 narr = (
-                    f"{nome} concentra a atenção nos sons ao redor de {local_nome}. "
-                    "Depois de separar o ruído do vento dos sons mais próximos, percebe uma movimentação abafada "
-                    "além da área imediatamente visível."
+                    f"{nome} atravessa o acesso e entra na área interna. O ruído da tempestade fica mais distante, "
+                    "e uma passagem estreita continua para dentro. As pegadas reaparecem no chão, agora muito mais nítidas."
                 )
-                evento = f"{nome} percebeu movimentação abafada além da área visível."
-        elif any(x in n for x in ("andar", "caminhar", "aproximar", "ir ate", "vou ate", "entrar", "seguir")):
+                evento = f"{nome} entrou na área interna e encontrou uma passagem que continua para dentro."
+                sugestoes = ["Seguir pela passagem", "Examinar as pegadas", "Ouvir o que existe mais adiante"]
+        elif any(x in n for x in ("ouvir", "escutar", "detectar", "perceber", "gritar", "tem alguem", "alguem ai")):
+            if local_id == "area_profunda":
+                narr = (
+                    f"{nome} força a atenção sobre os sons da área profunda. O eco devolve o próprio chamado "
+                    "com atraso, vindo de um ponto que não pode ser visto daqui. Não há resposta clara, mas agora "
+                    "é possível afirmar que existe outro espaço além da passagem."
+                )
+                evento = f"{nome} ouviu um eco vindo de além da área profunda."
+            elif teste and not sucesso:
+                narr = (
+                    f"{nome} tenta perceber uma resposta em meio ao ruído, mas não consegue identificar uma presença. "
+                    "O chamado, porém, retorna pela passagem com um eco incomum, indicando que o interior é mais profundo "
+                    "do que parecia."
+                )
+                evento = f"{nome} não identificou uma presença, mas confirmou que a passagem continua além do alcance da visão."
+            else:
+                narr = (
+                    f"{nome} chama e aguça a atenção para a resposta. O som percorre a passagem e volta como um eco "
+                    "curto vindo de uma área mais profunda. Ninguém responde, mas o ambiente claramente não termina aqui."
+                )
+                evento = f"{nome} ouviu um eco vindo de uma área mais profunda após chamar."
+            sugestoes = ["Seguir em direção ao eco", "Avançar pela passagem", "Esperar por uma resposta"]
+        elif any(x in n for x in ("olhar", "observar", "ver", "olho ao redor")):
             narr = (
-                f"{nome} avança com cautela em direção a {local_nome}. "
-                "Ao se aproximar, o chão revela marcas mais nítidas e o ponto de entrada deixa de parecer apenas abandonado: "
-                "há sinais recentes de passagem e uma corrente de ar vindo de dentro."
+                f"{nome} observa {local_nome} novamente, agora levando em conta o que já descobriu. "
+                "A passagem e as marcas recentes continuam visíveis, mas um detalhe novo chama atenção: "
+                "há sinais de uso muito mais recente perto do caminho que segue para dentro."
             )
-            evento = f"{nome} aproximou-se de {local_nome} e confirmou sinais recentes de passagem."
-        elif any(x in n for x in ("procurar", "buscar", "investigar", "inspecionar", "examinar", "analisar")):
-            prefixo = "Apesar da falha, " if teste and not sucesso else ""
-            narr = (
-                f"{prefixo}{nome} examina cuidadosamente os detalhes de {local_nome}. "
-                "A busca não resolve toda a situação, mas destaca uma pista concreta: marcas recentes interrompem "
-                "a camada de poeira em um ponto específico, indicando que algo foi movido ou passou por ali."
-            )
-            evento = f"{nome} investigou {local_nome} e identificou uma pista física recente."
-        elif any(x in n for x in ("chamar para briga", "chamar pra briga", "desafiar", "provocar", "lutar")):
-            narr = (
-                f"{nome} deixa claro que não pretende recuar diante de um possível adversário. "
-                "A provocação muda o clima da cena: quem estiver observando agora precisa decidir se responde, recua "
-                "ou tenta impedir que o confronto comece."
-            )
-            evento = f"{nome} provocou um possível confronto e alterou a tensão da cena."
+            evento = f"{nome} reavaliou {local_nome} e confirmou sinais recentes no caminho de entrada."
+            sugestoes = ["Seguir as marcas", "Entrar pela passagem", "Investigar os sinais de uso recente"]
         else:
             narr = (
-                f"{nome} age em {local_nome} e produz uma mudança perceptível na situação. "
-                f"A ação realizada foi: {texto}. O resultado foi {resultado_txt}; a atenção do grupo agora se volta "
-                "para o novo detalhe que surgiu no ambiente."
+                f"{nome} age em {local_nome}, e a situação muda sem apagar o que já foi descoberto. "
+                f"A ação foi: {texto}. O resultado foi {resultado_txt}. A atenção agora se concentra "
+                "na rota que continua além da área já explorada."
             )
-            evento = f"{nome} realizou '{texto}' com {resultado_txt}, alterando a situação em {local_nome}."
+            evento = f"{nome} realizou '{texto}' com {resultado_txt}; a exploração prossegue a partir das descobertas atuais."
+            sugestoes = ["Avançar pela rota descoberta", "Examinar as pistas existentes", "Observar antes de agir"]
 
-        novo_contexto = f"{contexto}\nEvento: {evento} Resultado mecânico: {resultado_txt}.".strip()
-        sugestoes = [
-            "Examinar a pista recém-percebida",
-            "Investigar a passagem ou origem dos sinais",
-            "Agir sobre o novo risco antes de continuar",
-        ]
+        novo_contexto = (
+            f"{contexto}\n"
+            f"Progressão: etapa {etapa + 1}. Evento: {evento} Resultado mecânico: {resultado_txt}."
+        ).strip()
         return {"narrativa": narr, "novo_contexto": novo_contexto, "sugestoes": sugestoes}
 
     async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None, historico: list | None = None) -> dict:

@@ -140,6 +140,39 @@ class NarratorTests(unittest.TestCase):
         parsed = Narrator("")._parse_json("```json\n{\"ok\": true}\n```")
         self.assertEqual(parsed, {"ok": True})
 
+    def test_offline_adventure_has_a_navigable_fallback_map(self):
+        intro = asyncio.run(Narrator("").iniciar_aventura(321))
+        locais = {local["id"]: local for local in intro["locais"]}
+        self.assertIn("local_inicial", locais)
+        self.assertIn("area_interna", locais)
+        self.assertIn("area_profunda", locais)
+        self.assertIn("area_interna", locais["local_inicial"]["conexoes"])
+        self.assertIn("area_profunda", locais["area_interna"]["conexoes"])
+        self.assertEqual(intro["progresso"]["local_atual"], "local_inicial")
+        self.assertEqual(intro["progresso"]["etapa_cena"], 0)
+
+    def test_offline_narration_changes_beat_instead_of_repeating_same_scene(self):
+        narrator = Narrator("")
+        session = {
+            "contexto": "Localização: Farol Antigo. Ameaça: ruínas despertas.",
+            "aventura": {
+                "progresso": {"local_atual": "local_inicial", "etapa_cena": 0, "eventos_importantes": []},
+                "locais": [
+                    {"id": "local_inicial", "nome": "Farol Antigo", "descricao": "Entrada do farol.", "conexoes": ["area_interna"]},
+                    {"id": "area_interna", "nome": "Área interna", "descricao": "Corredor interno.", "conexoes": ["local_inicial", "area_profunda"]},
+                    {"id": "area_profunda", "nome": "Área profunda", "descricao": "Parte profunda.", "conexoes": ["area_interna"]},
+                ],
+            },
+        }
+        character = {"nome": "Joelson", "classe": "Guerreiro", "raca": "Humano", "atributos": {"Inteligência": 10}}
+        first = narrator._fallback_narrativa(session, character, "rastrear pegadas", None)
+        session["contexto"] = first["novo_contexto"]
+        session["aventura"]["progresso"]["etapa_cena"] = 1
+        second = narrator._fallback_narrativa(session, character, "entrar no farol", None)
+        self.assertNotEqual(first["narrativa"], second["narrativa"])
+        self.assertIn("área interna", second["narrativa"].lower())
+        self.assertIn("etapa 2", second["novo_contexto"].lower())
+
     def test_offline_action_advances_context_and_scene(self):
         narrator = Narrator("")
         session = {"contexto": "Localização: Farol Antigo. Ameaça: ruínas despertas."}
