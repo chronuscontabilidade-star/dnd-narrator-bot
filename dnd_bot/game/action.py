@@ -120,6 +120,31 @@ class ActionResolver:
                 destino = None
 
         if tipo == "movimento":
+            # Referências como "seguir as pegadas", "continuar pela passagem" ou
+            # "avançar pelo caminho" podem apontar para a próxima conexão do mapa
+            # sem o jogador conhecer o ID/nome formal do local.
+            if destino is None:
+                referencia = normalize(str((semantic or {}).get("referencia") or ""))
+                termos_rota = (
+                    "rota", "caminho", "passagem", "pegada", "trilha",
+                    "corredor", "estrada", "seguir", "avancar", "avançar",
+                )
+                if any(termo in referencia or termo in normalize(text) for termo in termos_rota):
+                    atual_id = (self.adventure.get("progresso") or {}).get("local_atual")
+                    atual = next(
+                        (local for local in self.adventure.get("locais", [])
+                         if local.get("id") == atual_id),
+                        None,
+                    )
+                    conexoes = (atual or {}).get("conexoes", [])
+                    destino = next(
+                        (
+                            local.get("id")
+                            for local in self.adventure.get("locais", [])
+                            if local.get("id") in conexoes and not local.get("descoberto")
+                        ),
+                        None,
+                    )
             return ActionIntent(
                 tipo="movimento", descricao=text, alvo=str(alvo) if alvo else None,
                 destino=destino, requer_teste=False,
