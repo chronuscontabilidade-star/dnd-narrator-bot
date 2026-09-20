@@ -14,10 +14,10 @@ from database import Database
 from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
 from narrator import Narrator
 try:
-    from .game.action import ActionResolver, movimento_permitido
+    from .game.action import ActionResolver, movimento_permitido, normalize
     from .game.adventure import AdventureState
 except ImportError:
-    from game.action import ActionResolver, movimento_permitido
+    from game.action import ActionResolver, movimento_permitido, normalize
     from game.adventure import AdventureState
 
 load_dotenv()
@@ -439,7 +439,7 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             # área conectada descoberta pelo mapa, mas nunca salta para um local
             # arbitrariamente distante.
             if destino is None and any(
-                termo in ActionResolver.normalize(acao)
+                termo in normalize(acao)
                 for termo in ("entrar", "acessar")
             ):
                 local_atual = progresso_atual.get("local_atual")
