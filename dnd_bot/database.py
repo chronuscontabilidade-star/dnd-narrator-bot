@@ -284,6 +284,16 @@ class Database:
                 result.append(p)
             return result
 
+    def atualizar_status_combate(self, user_id: int, chat_id: int, hp: int) -> bool:
+        """Persiste o HP atual do personagem após efeitos mecânicos de combate."""
+        p = "%s" if self.backend == "postgres" else "?"
+        with self._conn() as conn:
+            cur = conn.execute(
+                f"UPDATE personagens SET hp={p} WHERE user_id={p} AND chat_id={p}",
+                (max(0, int(hp)), user_id, chat_id),
+            )
+            return cur.rowcount == 1
+
     # ── Ações / Histórico ─────────────────────────────────────────────────────
 
     def registrar_acao(self, user_id: int, chat_id: int, acao: str, resultado: str):
