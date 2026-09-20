@@ -246,6 +246,25 @@ class ActionResolver:
                 motivo="Salto pode exigir teste quando houver risco relevante.",
             )
 
+        # Desafios, provocações e convites para confronto são intenções sociais,
+        # mesmo quando a frase começa com uma ação narrativa como "olhar".
+        challenge_words = (
+            "chamar para briga", "chamar pra briga", "desafiar para briga",
+            "desafiar pra briga", "desafiar", "provocar uma briga",
+            "provocar", "chamar para lutar", "chamar pra lutar",
+            "convidar para lutar", "convidar pra lutar", "ameacar de briga",
+        )
+        if any(word in n for word in challenge_words):
+            return ActionIntent(
+                tipo="social",
+                descricao=text,
+                habilidade="Intimidação",
+                atributo="Carisma",
+                requer_teste=True,
+                cd=12,
+                motivo="Provocar ou desafiar alguém pode exigir Intimidação.",
+            )
+
         # Ações puramente narrativas.
         if any(word in n for word in (
             "andar", "caminhar", "olhar", "observar", "ver", "falar",
