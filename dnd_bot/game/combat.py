@@ -177,6 +177,8 @@ class CombatState:
     def start(self, rng=None) -> list[InitiativeResult]:
         if self.started:
             raise RuntimeError("O combate já foi iniciado.")
+        if self.finished:
+            raise ValueError("O combate precisa ter pelo menos um combatente vivo de cada lado.")
         results = []
         for combatant in self.combatants:
             roll_result = roll_d20(rng=rng)
