@@ -421,7 +421,6 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if destino and (
                 destino.get("id") == local_atual
                 or destino.get("id") in conexoes
-                or destino.get("descoberto")
             ):
                 estado = estado.update_progress(
                     current_location=destino["id"],
