@@ -509,6 +509,10 @@ class Narrator:
         elif any(x in n for x in (
             "avancar", "avançar", "seguir pela", "seguir pelo",
             "avancar pela rota", "avançar pela rota",
+            "descer", "subir", "atravessar", "cruzar", "aproximar",
+            "afastar", "recuar", "retornar", "entrar", "sair",
+            "continuar", "caminhar", "andar", "ir para", "ir pra",
+            "vou para", "vou pra",
         )):
             proximos = [
                 item for item in locais
