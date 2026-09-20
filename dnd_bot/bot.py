@@ -16,12 +16,14 @@ try:
     from .narrator import Narrator
     from .game.action import ActionResolver, movimento_permitido, normalize
     from .game.adventure import AdventureState
+    from .game.combat import CombatState
 except ImportError:
     from database import Database
     from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
     from narrator import Narrator
     from game.action import ActionResolver, movimento_permitido, normalize
     from game.adventure import AdventureState
+    from game.combat import CombatState
 
 load_dotenv()
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
@@ -63,6 +65,32 @@ def estados(ctx):
 def action_locks(ctx):
     """Locks por chat para serializar ações que alteram a campanha."""
     return ctx.application.bot_data.setdefault("action_locks", {})
+
+
+def _resolver_combate_aventura(aventura: dict) -> CombatState | None:
+    """Reconstrói o combate ativo persistido, se houver."""
+    raw = (aventura or {}).get("combate")
+    if not raw:
+        return None
+    return CombatState.from_dict(raw)
+
+
+def _resultado_ataque_texto(resultado) -> str:
+    """Mensagem mecânica curta, independente da narrativa da IA."""
+    if resultado.critical:
+        tipo = "CRÍTICO"
+    elif resultado.fumble:
+        tipo = "FALHA CRÍTICA"
+    elif resultado.hit:
+        tipo = "ACERTO"
+    else:
+        tipo = "ERRO"
+    dano = f" Dano: {resultado.damage}." if resultado.hit else ""
+    return (
+        f"⚔️ {tipo}: {resultado.attacker} contra {resultado.target}. "
+        f"Rolagem {resultado.roll.total} vs CA {resultado.armor_class}.{dano} "
+        f"HP restante do alvo: {next((c.hp for c in getattr(resultado, '_combatants', []) if c.name == resultado.target), '?')}."
+    )
 
 def teclado_nomes(opcoes):
     return ReplyKeyboardMarkup(
@@ -419,13 +447,65 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # O resolver define a natureza da ação. O narrador não pode transformar
     # uma ação rotineira em rolagem arbitrariamente.
     teste = None
-    if intent.requer_teste:
+    combate = None
+    if intent.tipo == "ataque":
+        try:
+            combate = _resolver_combate_aventura(aventura_atual)
+        except (ValueError, TypeError, KeyError) as exc:
+            log.warning("Combate persistido inválido: %s", exc)
+            combate = None
+
+        if combate is None or not combate.started:
+            await update.message.reply_text(
+                "⚔️ Não há combate ativo. O ataque só pode ser resolvido pelo motor "
+                "quando um encontro de combate estiver iniciado."
+            )
+            return
+
+        atacante = next((c for c in combate.combatants if c.name == p["nome"] and c.is_player), None)
+        alvo_nome = intent.alvo
+        alvo = next(
+            (c for c in combate.combatants if alvo_nome and normalize(c.name) == normalize(alvo_nome)),
+            None,
+        )
+        if atacante is None:
+            await update.message.reply_text("⚔️ Seu personagem não está presente no combate ativo.")
+            return
+        if alvo is None:
+            await update.message.reply_text(
+                "⚔️ Não identifiquei o alvo. Diga o nome do inimigo, por exemplo: "
+                "/acao atacar Goblin."
+            )
+            return
+
+        try:
+            resultado_ataque = combate.attack(atacante, alvo)
+        except (RuntimeError, ValueError) as exc:
+            await update.message.reply_text(f"⚔️ Ataque recusado pelo motor: {exc}")
+            return
+
+        teste = {
+            "tipo": "ataque",
+            "sucesso": resultado_ataque.hit,
+            "critico": resultado_ataque.critical,
+            "falha_critica": resultado_ataque.fumble,
+            "rolagem": resultado_ataque.roll.total,
+            "ca": resultado_ataque.armor_class,
+            "dano": resultado_ataque.damage,
+            "alvo": resultado_ataque.target,
+            "hp_alvo": alvo.hp,
+        }
+        aventura_atual = dict(aventura_atual)
+        aventura_atual["combate"] = combate.to_dict()
+        await update.message.reply_text(
+            f"⚔️ {'CRÍTICO' if resultado_ataque.critical else 'ACERTO' if resultado_ataque.hit else 'FALHA'} "
+            f"| {resultado_ataque.roll.total} vs CA {resultado_ataque.armor_class}"
+            + (f" | dano {resultado_ataque.damage} | HP {alvo.hp}" if resultado_ataque.hit else "")
+        )
+    elif intent.requer_teste:
         atributo = intent.atributo
         if atributo and atributo not in p["atributos"]:
             atributo = "Destreza"
-
-        # Ataques e ferramentas ficam para os próximos blocos do engine.
-        # Aqui executamos somente testes baseados em atributos existentes.
         if atributo:
             cd = max(1, min(int(intent.cd or 12), 30))
             teste = realizar_teste(p["atributos"], atributo, dificuldade=cd)
