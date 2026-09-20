@@ -54,6 +54,18 @@ def normalize(texto: str) -> str:
     )
 
 
+def movimento_permitido(adventure: dict, destino_id: str) -> bool:
+    """Valida movimento como conexão direta no grafo da aventura."""
+    progresso = adventure.get("progresso", {})
+    local_atual = progresso.get("local_atual")
+    locais = adventure.get("locais", [])
+    atual = next((local for local in locais if local.get("id") == local_atual), None)
+    destino = next((local for local in locais if local.get("id") == destino_id), None)
+    if not atual or not destino:
+        return False
+    return destino_id == local_atual or destino_id in atual.get("conexoes", [])
+
+
 class ActionResolver:
     """Resolve ações comuns sem depender de Telegram, DB ou provedor de IA."""
 
@@ -257,4 +269,4 @@ class ActionResolver:
         )
 
 
-__all__ = ["ActionIntent", "ActionResolver", "SKILLS", "normalize"]
+__all__ = ["ActionIntent", "ActionResolver", "SKILLS", "normalize", "movimento_permitido"]
