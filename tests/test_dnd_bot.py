@@ -110,6 +110,11 @@ class NarratorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             AdventureState.from_dict(raw)
 
+    def test_end_turn_intent_is_not_a_skill_check(self):
+        intent = ActionResolver({"combate": {"combatants": []}}).resolve("encerrar turno")
+        self.assertEqual(intent.tipo, "fim_turno")
+        self.assertFalse(intent.requer_teste)
+
     def test_attack_intent_targets_active_combatant(self):
         adventure = {
             "combate": {
