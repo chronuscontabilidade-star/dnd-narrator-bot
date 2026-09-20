@@ -70,6 +70,24 @@ class SemanticIntentTests(unittest.TestCase):
                 self.assertEqual(intent.destino, "corredor")
                 self.assertFalse(intent.requer_teste)
 
+    def test_free_form_positional_actions_are_movement(self):
+        resolver = ActionResolver(self.adventure)
+        for phrase in (
+            "descer pelas escadas",
+            "subir a escada",
+            "atravessar o corredor",
+            "aproximar-me do altar",
+            "recuar pelo caminho",
+        ):
+            with self.subTest(phrase=phrase):
+                intent = resolver.resolve_semantic(
+                    phrase,
+                    {"tipo": "narrativa", "alvo": None, "destino": None, "referencia": phrase},
+                )
+                self.assertEqual(intent.tipo, "movimento")
+                self.assertEqual(intent.destino, "corredor")
+                self.assertFalse(intent.requer_teste)
+
     def test_semantic_parser_cannot_invent_unknown_destination(self):
         narrator = Narrator("")
         narrator._request_json = lambda _prompt: asyncio.sleep(0, result={
