@@ -504,6 +504,44 @@ class Narrator:
             )
             sugestoes = ["Continuar o combate", "Mudar de posição", "Encerrar o turno"]
 
+        # Movimento pela rota descoberta precisa produzir deslocamento real no fallback,
+        # e nunca cair no texto genérico que apenas repete a cena.
+        elif any(x in n for x in (
+            "avancar", "avançar", "seguir pela", "seguir pelo",
+            "avancar pela rota", "avançar pela rota",
+        )):
+            proximos = [
+                item for item in locais
+                if item.get("id") in (local or {}).get("conexoes", [])
+                and not item.get("descoberto")
+            ]
+            destino = proximos[0] if proximos else None
+            if destino:
+                destino_nome = destino.get("nome", "a próxima área")
+                narr = (
+                    f"{nome} avança pela rota descoberta e deixa {local_nome} para trás. "
+                    f"O caminho conduz diretamente a {destino_nome}, onde o ambiente muda "
+                    "e novos sinais mostram que a exploração está entrando em território ainda não examinado."
+                )
+                evento = f"{nome} avançou de {local_nome} para {destino_nome} pela rota descoberta."
+                sugestoes = [
+                    "Examinar o novo local",
+                    "Observar os arredores antes de continuar",
+                    "Seguir por outra passagem disponível",
+                ]
+            else:
+                narr = (
+                    f"{nome} avança pela rota que já conhece, mas não encontra uma nova saída imediata "
+                    f"além de {local_nome}. O caminho termina por enquanto, e os sinais do local sugerem "
+                    "que será preciso investigar o ambiente para descobrir a próxima passagem."
+                )
+                evento = f"{nome} tentou avançar pela rota descoberta, mas não havia nova conexão direta a explorar."
+                sugestoes = [
+                    "Examinar o local em busca de uma passagem",
+                    "Observar sinais escondidos",
+                    "Voltar pela rota conhecida",
+                ]
+
         # Ações específicas consomem a pista anterior em vez de recomeçar a cena.
         elif any(x in n for x in ("rastrear", "seguir pegadas", "seguir as pegadas")):
             narr = (
