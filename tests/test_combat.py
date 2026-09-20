@@ -155,6 +155,7 @@ class CombatTests(unittest.TestCase):
         goblin = Combatant("Goblin", 10, 1, 0, position=(1, 0))
         combat = CombatState([hero, goblin])
         combat.start(FixedRng([10, 10]))
+        goblin.take_damage(1)
         self.assertTrue(combat.finished)
         with self.assertRaises((RuntimeError, ValueError)):
             combat.attack(hero, goblin, rng=FixedRng([10]))
