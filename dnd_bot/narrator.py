@@ -484,6 +484,26 @@ class Narrator:
         eventos = progresso.get("eventos_importantes") or []
         etapa = int(progresso.get("etapa_cena", 0) or 0)
 
+        # Combate é resolvido pelo engine. O narrador apenas traduz o
+        # resultado mecânico em ficção e não recalcula ataque, dano ou HP.
+        if teste and teste.get("tipo") == "ataque":
+            alvo = teste.get("alvo", "o alvo")
+            dano = int(teste.get("dano", 0) or 0)
+            hp_alvo = teste.get("hp_alvo", "?")
+            if teste.get("critico"):
+                narr = f"{nome} acerta {alvo} com um golpe crítico. O impacto causa {dano} de dano, deixando o inimigo com {hp_alvo} HP."
+            elif teste.get("sucesso"):
+                narr = f"{nome} atinge {alvo}. O golpe causa {dano} de dano, e o inimigo permanece com {hp_alvo} HP."
+            elif teste.get("falha_critica"):
+                narr = f"{nome} tenta atingir {alvo}, mas erra de forma desastrosa. Nenhum dano é causado."
+            else:
+                narr = f"{nome} desfere um ataque contra {alvo}, mas o golpe não encontra uma abertura. Nenhum dano é causado."
+            evento = (
+                f"{nome} atacou {alvo}: {'acerto' if teste.get('sucesso') else 'falha'}, "
+                f"dano {dano}, HP do alvo {hp_alvo}."
+            )
+            sugestoes = ["Continuar o combate", "Mudar de posição", "Encerrar o turno"]
+
         # Ações específicas consomem a pista anterior em vez de recomeçar a cena.
         if any(x in n for x in ("rastrear", "seguir pegadas", "seguir as pegadas")):
             narr = (
