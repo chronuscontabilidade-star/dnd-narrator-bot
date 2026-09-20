@@ -291,7 +291,7 @@ Regra final: a IA nunca grava diretamente no Campaign State.
 - [ ] Métricas de provider/tokens/custo.
 - [ ] Métricas completas de NPCs e pistas.
 - [ ] Critérios de falha completos.
-- [ ] Substituir fixtures/hardcodes do vertical slice por resolução genérica.
+- [x] Resolver etapas de quest por alvos estruturados, sem hardcode dos IDs da aventura vertical.
 - [ ] Primeiro vertical slice completo: criação → cena → exploração → pista → teste → NPC → combate → loot → quest → novo local → consequência → desfecho.
 
 **Nota importante:** o simulador atual é uma ferramenta de engenharia determinística. Ele já prova partes relevantes do pipeline, mas ainda não é um simulador de campanha completo.
