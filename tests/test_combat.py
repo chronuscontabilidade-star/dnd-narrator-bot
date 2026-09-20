@@ -165,6 +165,13 @@ class CombatTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CombatState([hero, duplicate])
 
+    def test_combat_requires_both_sides_alive_before_start(self):
+        hero = Combatant("Heroi", 12, 10, 10, is_player=True)
+        fallen_enemy = Combatant("Goblin", 12, 7, 0)
+        combat = CombatState([hero, fallen_enemy])
+        with self.assertRaises(ValueError):
+            combat.start(FixedRng([10, 10]))
+
     def test_combat_cannot_start_twice(self):
         hero = Combatant("Heroi", 12, 10, 10, is_player=True)
         goblin = Combatant("Goblin", 12, 7, 7)
