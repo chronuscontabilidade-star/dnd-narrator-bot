@@ -443,7 +443,15 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     aventura_atual = sessao.get("aventura") or {}
-    intent = ActionResolver(aventura_atual).resolve(acao)
+    resolver = ActionResolver(aventura_atual)
+    intent = resolver.resolve(acao)
+
+    # Se a linguagem não foi reconhecida deterministicamente, a IA atua
+    # somente como tradutora semântica. O motor continua dono das regras.
+    if intent.tipo == "ambigua":
+        semantic = await narrator.interpretar_acao(sessao, p, acao)
+        if semantic:
+            intent = resolver.resolve_semantic(acao, semantic)
 
     # O resolver define a natureza da ação. O narrador não pode transformar
     # uma ação rotineira em rolagem arbitrariamente.
