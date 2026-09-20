@@ -217,11 +217,19 @@ class ActionResolver:
                 )
 
         if any(word in n for word in ("atacar", "bater", "golpear", "lutar")):
+            alvo = None
+            combate = self.adventure.get("combate") or {}
+            for combatant in combate.get("combatants", []):
+                nome = combatant.get("name", "")
+                if nome and normalize(nome) in n:
+                    alvo = nome
+                    break
             return ActionIntent(
                 tipo="ataque",
                 descricao=text,
-                requer_teste=True,
-                motivo="Ataques são resolvidos pelo motor de combate.",
+                alvo=alvo,
+                requer_teste=False,
+                motivo="Ataques são resolvidos exclusivamente pelo motor de combate.",
             )
 
         if any(word in n for word in ("escalar", "subir pela parede")):
