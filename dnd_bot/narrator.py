@@ -676,33 +676,86 @@ class Narrator:
             {"id": local.get("id"), "nome": local.get("nome"), "descoberto": local.get("descoberto", False)}
             for local in aventura.get("locais", [])
         ]
+
         prompt = (
-            "Você é um classificador de intenção para um jogo de D&D 5e. "
-            "Sua única função é entender o que o jogador quis tentar fazer. "
-            "NÃO narre, NÃO role dados, NÃO escolha CD, NÃO cause dano, NÃO invente locais, "
-            "NPCs, itens ou consequências. Retorne SOMENTE JSON válido. "
-            "Escolha exatamente um tipo entre: movimento, percepcao, investigacao, obstaculo, "
-            "ferramentas, furtividade, furto, social, ataque, narrativa, fim_turno. "
-            "Se a frase indicar deslocamento, prefira movimento mesmo que contenha palavras como "
-            "procurar, buscar, olhar ou investigar. 'Vou seguir o caminho das pegadas' é movimento "
-            "se o objetivo principal for avançar pelo caminho. "
-            "Para movimento, destino deve ser o ID de um local da lista somente quando o jogador "
-            "nomear claramente esse local. Caso contrário, use destino null e coloque a referência "
-            "linguística em referencia. "
-            "Para social, habilidade pode ser Persuasão, Enganação ou Intimidação. "
-            "Para as demais intenções, habilidade pode ser omitida. "
+            "Você é o classificador semântico de um jogo de D&D. "
+            "Entenda o OBJETIVO da frase do jogador, não apenas palavras isoladas. "
+            "Retorne SOMENTE JSON válido com tipo, alvo, destino, habilidade e referencia. "
+            "Tipos: movimento, percepcao, investigacao, obstaculo, ferramentas, furtividade, "
+            "furto, social, ataque, narrativa, fim_turno. "
+            "Movimento inclui qualquer intenção de mudar de posição ou continuar uma rota: "
+            "ir, entrar, sair, voltar, avançar, continuar, seguir, pegar um caminho, tomar uma passagem, "
+            "ir pela trilha, seguir as pegadas. Se o jogador não disser o nome formal de um local, destino é null "
+            "e referencia descreve a rota/pista usada. "
+            "NÃO narre, NÃO role dados, NÃO escolha CD, NÃO invente locais, NPCs, itens ou consequências. "
             f"Locais conhecidos: {json.dumps(locais, ensure_ascii=False)}. "
             f"Local atual: {(aventura.get('progresso') or {}).get('local_atual')}. "
-            f"Objetivos/quests: {json.dumps(aventura.get('quests') or [], ensure_ascii=False)[:5000]}. "
+            f"Quests: {json.dumps(aventura.get('quests') or [], ensure_ascii=False)[:5000]}. "
             f"Personagem: {personagem.get('nome')} ({personagem.get('classe')}, {personagem.get('raca')}). "
-            f"Ação do jogador: {acao}"
+            f"Ação: {acao}"
         )
         try:
             data = await self._request_json(prompt)
             return self._validar_intencao_semantica(data, aventura)
         except Exception as exc:
-            log.info("Classificador semântico indisponível; mantendo resolver determinístico: %s", exc)
-            return None
+            log.info("Classificador semântico indisponível; usando classificação local: %s", exc)
+
+        # Fallback semântico local. Não tenta enumerar todos os verbos da língua:
+        # identifica conceitos de intenção e deixa o motor validar a consequência.
+        n = self._normalizar_acao(acao)
+        if any(x in n for x in (
+            "ir ", "vou ", "entrar", "entro", "sair", "voltar", "seguir",
+            "avancar", "avançar", "continuar", "caminho", "rota", "passagem",
+            "trilha", "pegadas", "corredor",
+        )):
+            return {
+                "tipo": "movimento",
+                "alvo": None,
+                "destino": None,
+                "habilidade": None,
+                "referencia": acao[:160],
+            }
+        if any(x in n for x in ("atacar", "golpear", "bater em", "lutar contra")):
+            return {
+                "tipo": "ataque",
+                "alvo": None,
+                "destino": None,
+                "habilidade": None,
+                "referencia": acao[:160],
+            }
+        if any(x in n for x in ("ouvir", "escutar", "perceber", "detectar", "observar atentamente")):
+            return {
+                "tipo": "percepcao",
+                "alvo": None,
+                "destino": None,
+                "habilidade": "Percepção",
+                "referencia": acao[:160],
+            }
+        if any(x in n for x in ("investigar", "examinar", "inspecionar", "analisar", "procurar", "buscar pista")):
+            return {
+                "tipo": "investigacao",
+                "alvo": None,
+                "destino": None,
+                "habilidade": "Investigação",
+                "referencia": acao[:160],
+            }
+        if any(x in n for x in ("esconder", "ocultar", "furtividade", "me ocultar")):
+            return {
+                "tipo": "furtividade",
+                "alvo": None,
+                "destino": None,
+                "habilidade": "Furtividade",
+                "referencia": acao[:160],
+            }
+        if any(x in n for x in ("roubar", "furtar", "surrupiar", "pegar sem ser visto")):
+            return {
+                "tipo": "furto",
+                "alvo": None,
+                "destino": None,
+                "habilidade": "Prestidigitação",
+                "referencia": acao[:160],
+            }
+        return None
 
     async def narrar_acao_com_dado(self, sessao: dict, personagem: dict, jogadores: list, acao: str, teste: dict | None, historico: list | None = None) -> dict:
         historia = str(personagem.get("historia") or "").strip()
