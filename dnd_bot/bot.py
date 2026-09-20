@@ -57,6 +57,10 @@ def estado_key(update):
 def estados(ctx):
     return ctx.application.bot_data.setdefault("entradas", {})
 
+def action_locks(ctx):
+    """Locks por chat para serializar ações que alteram a campanha."""
+    return ctx.application.bot_data.setdefault("action_locks", {})
+
 def teclado_nomes(opcoes):
     return ReplyKeyboardMarkup(
         [[nome] for nome in opcoes],
@@ -361,6 +365,12 @@ async def cmd_nova_aventura(update, ctx):
 
 async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    lock = action_locks(ctx).setdefault(chat_id, asyncio.Lock())
+    async with lock:
+        return await _cmd_acao_locked(update, ctx)
+
+async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     sessao = db.obter_sessao(chat_id)
     p = db.obter_personagem(user_id, chat_id)
@@ -499,11 +509,21 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"Evento: {p['nome']} realizou '{acao}'. Resultado: {status}."
         )
 
-    db.atualizar_contexto(
+    contexto_ok = db.atualizar_contexto(
         chat_id,
         novo_ctx,
         contexto_anterior=sessao_atual["contexto"],
     )
+    if not contexto_ok:
+        # Outra operação modificou a sessão depois do snapshot. O lock evita
+        # concorrência dentro do processo, mas o CAS também protege contra
+        # múltiplas instâncias do bot.
+        log.warning("CAS rejeitou atualização de contexto no chat %s", chat_id)
+        await update.message.reply_text(
+            "⚠️ A campanha mudou enquanto eu processava sua ação. "
+            "Sua ação não foi aplicada ao contexto atual. Tente novamente."
+        )
+        return
     db.registrar_acao(user_id, chat_id, acao, resultado["narrativa"])
 
     sugestoes_txt = formatar_sugestoes(resultado.get("sugestoes", []))
