@@ -10,13 +10,16 @@ from telegram.error import NetworkError, TimedOut
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
-from database import Database
-from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
-from narrator import Narrator
 try:
+    from .database import Database
+    from .dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
+    from .narrator import Narrator
     from .game.action import ActionResolver, movimento_permitido, normalize
     from .game.adventure import AdventureState
 except ImportError:
+    from database import Database
+    from dice import ATTR_EMOJI, detectar_atributo, escapa, formatar_resultado_dado, modificador, realizar_teste
+    from narrator import Narrator
     from game.action import ActionResolver, movimento_permitido, normalize
     from game.adventure import AdventureState
 
