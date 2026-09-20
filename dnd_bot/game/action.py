@@ -216,6 +216,14 @@ class ActionResolver:
                     motivo=f"Interação social que depende de {skill}.",
                 )
 
+        if any(word in n for word in ("encerrar turno", "terminar turno", "fim do turno", "passar turno")):
+            return ActionIntent(
+                tipo="fim_turno",
+                descricao=text,
+                requer_teste=False,
+                motivo="Encerramento explícito do turno de combate.",
+            )
+
         if any(word in n for word in ("atacar", "bater", "golpear", "lutar")):
             alvo = None
             combate = self.adventure.get("combate") or {}
