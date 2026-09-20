@@ -462,7 +462,10 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     pass
             aventura_atual.pop("combate", None)
 
-        linhas = [f"⏳ Turno encerrado. Agora é a vez de {proximo.name}."]
+        if combate.finished:
+            linhas = ["🏁 O combate terminou."]
+        else:
+            linhas = [f"⏳ Turno encerrado. Agora é a vez de {combate.current.name}."]
         for item in inimigo_resultados:
             status = "acertou" if item["acertou"] else "errou"
             detalhe = f", causando {item['dano']} de dano." if item["acertou"] else "."
@@ -487,6 +490,13 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         atacante = next((c for c in combate.combatants if c.name == p["nome"] and c.is_player), None)
         alvo_nome = intent.alvo
+        if not alvo_nome:
+            texto_normalizado = normalize(acao)
+            alvo_nome = next(
+                (c.name for c in combate.combatants
+                 if c.is_alive and normalize(c.name) in texto_normalizado and not c.is_player),
+                None,
+            )
         alvo = next(
             (c for c in combate.combatants if alvo_nome and normalize(c.name) == normalize(alvo_nome)),
             None,
