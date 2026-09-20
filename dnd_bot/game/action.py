@@ -103,13 +103,31 @@ class ActionResolver:
 
         destination = self._find_location(text)
 
-        # Movimento explícito. Entrar/ir por uma passagem livre não é teste.
+        # Movimento explícito. Entrar/ir/avançar por uma rota livre não é teste.
         movement_words = (
             "entrar", "entra", "entro", "ir para", "vou para", "ir pra", "vou pra", "ir ate",
-            "vou ate", "seguir para", "seguir pra", "seguir ate", "voltar para", "voltar pra", "sair",
-            "caminhar para", "andar para", "aproximar",
+            "vou ate", "seguir para", "seguir pra", "seguir ate", "seguir pela", "seguir pelo",
+            "avancar", "avancar pela", "avancar pelo", "avançar", "avançar pela", "avançar pelo",
+            "voltar para", "voltar pra", "sair", "caminhar para", "andar para", "aproximar",
         )
         if any(word in n for word in movement_words):
+            # Quando o jogador não nomeia o destino, uma expressão como
+            # "avançar pela rota descoberta" deve consumir a próxima conexão
+            # direta ainda não descoberta. Nunca escolhemos um local distante.
+            if destination is None and any(
+                termo in n for termo in ("avancar", "seguir pela", "seguir pelo", "rota", "passagem", "caminho")
+            ):
+                atual = next(
+                    (local for local in self.adventure.get("locais", [])
+                     if local.get("id") == self.adventure.get("progresso", {}).get("local_atual")),
+                    None,
+                )
+                conexoes = (atual or {}).get("conexoes", [])
+                destination = next(
+                    (local.get("id") for local in self.adventure.get("locais", [])
+                     if local.get("id") in conexoes and not local.get("descoberto")),
+                    None,
+                )
             return ActionIntent(
                 tipo="movimento",
                 descricao=text,
