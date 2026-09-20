@@ -170,7 +170,12 @@ def empty_adventure_state(
     local_inicial: str,
     narrativa_inicial: str,
 ) -> dict[str, Any]:
-    """Cria um estado mínimo quando nenhum provedor de IA está disponível."""
+    """Cria uma aventura offline pequena, mas realmente navegável.
+
+    O fallback não deve apenas mostrar um texto bonito. Mesmo sem IA, o jogador
+    precisa conseguir descobrir áreas, mover-se e produzir consequências que
+    sobrevivam à próxima ação.
+    """
 
     slug = "".join(ch.lower() if ch.isalnum() else "_" for ch in titulo).strip("_")
     return {
@@ -197,8 +202,26 @@ def empty_adventure_state(
                 "descricao": narrativa_inicial,
                 "descoberto": True,
                 "visitado": True,
-                "conexoes": [],
-            }
+                "conexoes": ["area_interna"],
+            },
+            {
+                "id": "area_interna",
+                "nome": "Área interna",
+                "tipo": "interior",
+                "descricao": "Uma área protegida do ambiente externo, com sinais recentes de passagem e uma rota que continua para dentro.",
+                "descoberto": False,
+                "visitado": False,
+                "conexoes": ["local_inicial", "area_profunda"],
+            },
+            {
+                "id": "area_profunda",
+                "nome": "Área profunda",
+                "tipo": "oculta",
+                "descricao": "Uma parte mais profunda do local, onde os sinais da presença recente ficam mais evidentes.",
+                "descoberto": False,
+                "visitado": False,
+                "conexoes": ["area_interna"],
+            },
         ],
         "npcs": [],
         "encounters": [],
@@ -214,6 +237,7 @@ def empty_adventure_state(
             "encounters_concluidos": [],
             "quests_concluidas": [],
             "eventos_importantes": [],
+            "etapa_cena": 0,
         },
     }
 
