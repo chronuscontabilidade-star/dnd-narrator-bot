@@ -99,6 +99,16 @@ class NarratorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             state.complete_quest_step("q1", "s2")
 
+    def test_adventure_state_rejects_unsupported_schema_version(self):
+        raw = {
+            "schema_version": 999,
+            "aventura": {"id": "a", "titulo": "A", "resumo": "R", "status": "em_andamento"},
+            "mundo": {}, "locais": [], "npcs": [], "encounters": [], "quests": [],
+            "itens": [], "flags": {}, "progresso": {},
+        }
+        with self.assertRaises(ValueError):
+            AdventureState.from_dict(raw)
+
     def test_adventure_generation_prompt_defines_stable_contract(self):
         prompt = adventure_generation_prompt()
         self.assertIn('"schema_version": 1', prompt)
