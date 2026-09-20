@@ -95,6 +95,16 @@ class AdventureValidatorAdvancedTests(unittest.TestCase):
             {issue.code for issue in issues},
         )
 
+    def test_missing_flag_quest_target_is_error(self):
+        raw = build_vertical_slice_adventure().to_dict()
+        raw["quests"][0]["etapas"][0]["alvo"] = {
+            "tipo": "flag",
+            "id": "flag_inexistente",
+        }
+        state = AdventureState.from_dict(raw)
+        issues = self.validator.validate(state)
+        self.assertIn("broken_quest_target", {issue.code for issue in issues})
+
     def test_active_quest_without_pending_steps_is_error(self):
         raw = build_vertical_slice_adventure().to_dict()
         for step in raw["quests"][0]["etapas"]:
