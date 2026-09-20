@@ -33,6 +33,18 @@ class DiceTests(unittest.TestCase):
         result = roll_d20(advantage=True, disadvantage=True, rng=FixedRng([11]))
         self.assertEqual(result.rolls, (11,))
 
+    def test_invalid_die_and_quantity_are_rejected(self):
+        with self.assertRaises(ValueError):
+            roll(1, 1, FixedRng([1]))
+        with self.assertRaises(ValueError):
+            roll(6, 0, FixedRng([]))
+
+    def test_invalid_dice_expression_is_rejected(self):
+        with self.assertRaises(ValueError):
+            roll_expression("2d6+")
+        with self.assertRaises(ValueError):
+            roll_expression("0d6")
+
     def test_expression_supports_modifier(self):
         result = roll_expression("2d6+3", FixedRng([2, 4]))
         self.assertEqual(result.rolls, (2, 4))
@@ -61,6 +73,16 @@ class RulesTests(unittest.TestCase):
         self.assertEqual(result.total, 17)
         self.assertTrue(result.success)
 
+    def test_rules_reject_invalid_dc_and_level(self):
+        with self.assertRaises(ValueError):
+            ability_check(10, 0, rng=FixedRng([10]))
+        with self.assertRaises(ValueError):
+            ability_check(10, 31, rng=FixedRng([10]))
+        with self.assertRaises(ValueError):
+            proficiency_bonus(0)
+        with self.assertRaises(ValueError):
+            proficiency_bonus(21)
+
     def test_check_can_fail(self):
         result = ability_check(8, 15, rng=FixedRng([10]))
         self.assertEqual(result.total, 9)
@@ -68,6 +90,18 @@ class RulesTests(unittest.TestCase):
 
 
 class CharacterTests(unittest.TestCase):
+    def test_character_rejects_invalid_hp_and_level(self):
+        abilities = {ability: 10 for ability in (
+            "Força", "Destreza", "Constituição",
+            "Inteligência", "Sabedoria", "Carisma",
+        )}
+        with self.assertRaises(ValueError):
+            Character("Kira", "Humano", "Guerreiro", abilities, level=0, max_hp=10, hp=10, armor_class=10)
+        with self.assertRaises(ValueError):
+            Character("Kira", "Humano", "Guerreiro", abilities, max_hp=10, hp=11, armor_class=10)
+        with self.assertRaises(ValueError):
+            Character("Kira", "Humano", "Guerreiro", abilities, max_hp=0, hp=0, armor_class=10)
+
     def test_character_has_core_state(self):
         character = Character(
             name="Kira",
