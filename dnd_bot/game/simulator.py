@@ -539,6 +539,8 @@ class CampaignSimulator:
     def _idle_steps(self, report: SimulationReport) -> int:
         idle = 0
         for event in reversed(report.events):
+            # Eventos como "acao:*", "teste:*" e "jogador:*" são metadados
+            # da rodada. Eles não devem zerar a contagem de estagnação.
             if event == "sem_progresso":
                 idle += 1
             elif event == "progresso":
