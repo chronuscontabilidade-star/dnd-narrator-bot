@@ -107,6 +107,9 @@ class AdventureState:
         for secret in data.get("segredos", []):
             if secret.get("id") == secret_id:
                 secret["revelado"] = True
+                revealed = data["progresso"].setdefault("segredos_revelados", [])
+                if secret_id not in revealed:
+                    revealed.append(secret_id)
                 return AdventureState.from_dict(data)
         raise ValueError(f"Segredo inexistente: {secret_id}")
 
@@ -133,10 +136,19 @@ class AdventureState:
             if quest.get("id") != quest_id:
                 continue
             quest_found = True
-            for step in quest.get("etapas", []):
-                if step.get("id") == step_id:
-                    step["status"] = "concluida"
-                    step_found = True
+            steps = quest.get("etapas", [])
+            step_index = next(
+                (index for index, step in enumerate(steps) if step.get("id") == step_id),
+                None,
+            )
+            if step_index is not None:
+                step_found = True
+                earlier = steps[:step_index]
+                if any(step.get("status") != "concluida" for step in earlier):
+                    raise ValueError(
+                        f"Etapa {step_id} não pode ser concluída antes das etapas anteriores."
+                    )
+                steps[step_index]["status"] = "concluida"
             if quest.get("etapas") and all(step.get("status") == "concluida" for step in quest["etapas"]):
                 quest["status"] = "concluida"
                 completed = data["progresso"].setdefault("quests_concluidas", [])
