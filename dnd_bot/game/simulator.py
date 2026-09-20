@@ -713,6 +713,8 @@ class CampaignSimulator:
         encounter_id: str = "encontro_guardiao",
         enemy_name: str = "Guarda da Cripta",
     ) -> AdventureState:
+        if enemy_name.strip() == character.name.strip():
+            enemy_name = f"Inimigo: {enemy_name}"
         enemy = Combatant(
             name=enemy_name,
             armor_class=10,
