@@ -27,6 +27,9 @@ class AdventureState:
         if not isinstance(raw, dict):
             raise ValueError("AdventureState precisa ser um objeto JSON")
 
+        schema_version = raw.get("schema_version", SCHEMA_VERSION)
+        if schema_version != SCHEMA_VERSION:
+            raise ValueError(f"Versão de schema não suportada: {schema_version}")
         adventure = raw.get("aventura")
         if not isinstance(adventure, dict):
             raise ValueError("Campo 'aventura' ausente ou inválido")
@@ -55,7 +58,6 @@ class AdventureState:
             raise ValueError("'progresso' precisa ser um objeto")
 
         data = deepcopy(raw)
-        data.setdefault("schema_version", SCHEMA_VERSION)
         data["schema_version"] = SCHEMA_VERSION
         return cls(data)
 
