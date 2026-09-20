@@ -556,7 +556,7 @@ class Narrator:
             evento = f"{nome} rastreou as pegadas e confirmou uma passagem recente pelo acesso."
             sugestoes = ["Entrar pela passagem", "Examinar o ponto onde as pegadas terminam", "Procurar sinais de quem passou por ali"]
         elif any(x in n for x in ("examinar", "investigar", "procurar", "buscar pistas", "inspecionar", "analisar")):
-            if local_id == "area_interna" or etapa >= 2:
+            if local_id == "area_interna":
                 narr = (
                     f"{nome} examina {local_nome} com mais cuidado. Atrás da camada de poeira, "
                     "surge uma escada estreita descendo para uma área mais profunda. O ar que sobe dali "
@@ -564,6 +564,14 @@ class Narrator:
                 )
                 evento = f"{nome} descobriu uma escada que leva da área interna para uma área mais profunda."
                 sugestoes = ["Descer pela escada", "Examinar as marcas nos degraus", "Esperar e observar antes de descer"]
+            elif local_id == "area_profunda":
+                narr = (
+                    f"{nome} examina {local_nome} com atenção. As marcas recentes continuam pelo chão e "
+                    "desaparecem atrás de uma estrutura de pedra parcialmente aberta. O espaço é mais amplo "
+                    "do que parecia à distância, e há sinais de que alguém esteve aqui recentemente."
+                )
+                evento = f"{nome} examinou a área profunda e encontrou sinais recentes junto à estrutura de pedra."
+                sugestoes = ["Examinar a estrutura de pedra", "Seguir as marcas", "Observar antes de avançar"]
             else:
                 prefixo = "Apesar da falha, " if teste and not sucesso else ""
                 narr = (
