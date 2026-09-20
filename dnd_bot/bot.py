@@ -296,7 +296,13 @@ async def receber_detalhes(update, ctx):
         return
     detalhes = update.message.text.strip()
     estado["personagem"]["detalhes"] = "" if detalhes.lower() in {"nenhum", "nenhuma", "n/a", "nao", "não"} else detalhes[:4000]
-    await finalizar_personagem(update, ctx, estado)
+
+    # A finalização cria/reativa a campanha e persiste personagem + sessão.
+    # Ela precisa usar o mesmo lock por chat de /acao e /nova_aventura.
+    chat_id = update.effective_chat.id
+    lock = action_locks(ctx).setdefault(chat_id, asyncio.Lock())
+    async with lock:
+        await finalizar_personagem(update, ctx, estado)
 
 async def processar_entrada(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     etapa = estados(ctx).get(estado_key(update), {}).get("etapa")
@@ -314,7 +320,17 @@ async def cancelar_entrada(update, ctx):
     await update.message.reply_text("❌ Criação cancelada.", reply_markup=ReplyKeyboardRemove())
 
 async def cmd_iniciar_historia(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Inicia/repara a aventura para um personagem já criado."""
+    """Inicia/repara a aventura para um personagem já criado.
+
+    A operação inteira fica serializada por chat para impedir que duas
+    inicializações concorrentes sobrescrevam a sessão da campanha.
+    """
+    chat_id = update.effective_chat.id
+    lock = action_locks(ctx).setdefault(chat_id, asyncio.Lock())
+    async with lock:
+        return await _cmd_iniciar_historia_locked(update, ctx)
+
+async def _cmd_iniciar_historia_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     personagem = db.obter_personagem(user_id, chat_id)
@@ -349,6 +365,13 @@ async def cmd_iniciar_historia(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
 
 async def cmd_nova_aventura(update, ctx):
+    """Cria uma nova campanha com a mesma serialização usada por /acao."""
+    chat_id = update.effective_chat.id
+    lock = action_locks(ctx).setdefault(chat_id, asyncio.Lock())
+    async with lock:
+        return await _cmd_nova_aventura_locked(update, ctx)
+
+async def _cmd_nova_aventura_locked(update, ctx):
     chat_id = update.effective_chat.id
     if db.obter_sessao(chat_id) and (not ctx.args or ctx.args[0].upper() != "CONFIRMAR"):
         await update.message.reply_text(
