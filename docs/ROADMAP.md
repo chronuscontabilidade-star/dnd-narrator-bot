@@ -1,304 +1,291 @@
 # Roadmap de desenvolvimento
 
-Este roadmap representa o estado real do projeto na branch `fix/stability-audit-2026-09`. Itens marcados como concluídos correspondem ao código que já existe no repositório. Itens marcados como parciais ainda possuem limitações conhecidas.
+Este documento representa o estado de engenharia conhecido ao final da rodada de estabilização de setembro de 2026.
 
-## Princípios de arquitetura
+## Marco atual
 
-1. **GameEngine é a autoridade das regras.** A IA interpreta, narra e propõe; o código valida e aplica.
-2. **AdventureState é a autoridade do estado atual da aventura.**
-3. **IA é substituível.**
-4. **Liberdade do jogador é preservada.**
-5. **Campanhas são geradas dinamicamente.**
-6. **Mecânicas críticas precisam ser testáveis sem jogar uma campanha inteira manualmente.**
+**Marco: núcleo jogável + auditoria de estabilidade em andamento.**
+
+O bot já consegue criar personagens, criar/retomar aventuras, interpretar ações, executar testes, narrar consequências e persistir parte do estado. O próximo trabalho não é adicionar dezenas de funcionalidades: é tornar esse fluxo confiável sob ações consecutivas, concorrência, reinício e entradas imprevisíveis.
 
 ---
 
-## P0, estabilidade
+## P0, estabilidade do fluxo real
 
-- [x] Corrigir bugs críticos da auditoria.
-- [x] Multiplayer sem apagar personagens.
-- [x] Reset explícito de campanha.
-- [x] Proteção contra estado concorrente/CAS.
-- [x] Validação de respostas da IA.
-- [x] Telegram seguro para mensagens longas.
-- [x] Gemini/provider cooldown e fallback.
+### Concluído
+
+- [x] Corrigir criação/retomada de aventura.
+- [x] Evitar reset implícito de campanha.
+- [x] Persistir personagens por usuário/chat.
+- [x] Persistir AdventureState na sessão.
+- [x] CAS para atualização de contexto.
+- [x] Validar JSON/narrativa retornados pela IA.
+- [x] Rejeitar placeholders narrativos genéricos.
+- [x] Fallback narrativo determinístico.
+- [x] Timeout real de provider.
+- [x] Cooldown/fallback entre providers.
+- [x] Fallback local/offline.
+- [x] Telegram com chunking seguro.
 - [x] Geração de imagem fora do event loop.
-- [x] PostgreSQL/Supabase dependency.
-- [x] CI criado.
-- [ ] Confirmar execução verde do GitHub Actions para a branch/PR atual.
-- [ ] Revisar e fazer merge da PR de estabilidade.
+- [x] Movimento validado pelo grafo de locais.
+- [x] Evitar teleporte para destino desconhecido.
+- [x] Reconhecer formas informais de movimento.
+- [x] Registrar ações no progresso da aventura.
+- [x] Preservar contexto em atualização concorrente via CAS.
+
+### Ainda aberto
+
+- [ ] Lock por chat/campanha durante processamento de `/acao`.
+- [ ] Garantir que respostas atrasadas de provider não sejam aplicadas sobre estado novo.
+- [ ] Testar duas ações rápidas no mesmo chat.
+- [ ] Testar dois jogadores agindo em sequência.
+- [ ] Testar reinício do processo durante campanha.
+- [ ] Confirmar CI verde para o commit final.
+- [ ] Consolidar merge da linha de estabilidade para `main`.
+
+**Critério de pronto:** duas ou mais ações simultâneas não podem apagar, repetir ou reverter uma consequência válida de outra ação.
 
 ---
 
-## P1, núcleo determinístico de D&D 5e 2014
+## P1, motor determinístico
 
-### Já implementado
+### Já existe
 
 - [x] Dice engine.
-- [x] Modificadores de atributos.
+- [x] Modificadores.
 - [x] Proficiência básica.
 - [x] Ability checks básicos.
 - [x] Saving throws básicos.
 - [x] Character model inicial.
 - [x] GameEngine inicial.
-- [x] AdventureState estruturado.
-- [x] ActionResolver inicial.
+- [x] AdventureState.
+- [x] ActionResolver.
 - [x] Ações rotineiras sem teste.
 - [x] Ações de risco encaminhadas para testes.
-- [x] Criação de atributos usando 4d6, descartando o menor.
-- [x] Bônus raciais das raças atualmente oferecidas.
-- [x] Combate inicial: iniciativa, turnos, movimento, ação, ataque, dano, crítico e estados básicos.
+- [x] Criação 4d6 drop-lowest.
+- [x] Bônus raciais.
+- [x] Combate inicial.
 
-### Ainda falta
+### Próximo
 
-- [ ] Consolidar Skill Check completo com proficiência dentro do GameEngine.
-- [ ] Consolidar Saving Throw completo dentro do GameEngine.
+- [ ] Consolidar Skill Check completo no GameEngine.
+- [ ] Consolidar Saving Throw completo no GameEngine.
 - [ ] Event model transacional.
 - [ ] Repository transacional.
-- [ ] Inventário e equipamentos como estado determinístico.
-- [ ] Condições como estado determinístico.
-
-**Critério de pronto:** o modelo não consegue produzir uma alteração inválida apenas inventando JSON.
+- [ ] Inventário/equipamentos determinísticos.
+- [ ] Condições determinísticas.
 
 ---
 
 ## P2, personagem completo
 
-- [ ] HP máximo e atual.
+- [ ] HP máximo/atual.
 - [ ] CA.
 - [ ] Nível.
 - [ ] XP.
 - [ ] Bônus de proficiência por nível.
-- [ ] Todas as perícias com aplicação completa.
-- [ ] Proficiências de testes de resistência.
-- [ ] Proficiências de armas, armaduras e ferramentas.
+- [ ] Todas as perícias completas.
+- [ ] Salvaguardas e proficiências completas.
+- [ ] Armas, armaduras e ferramentas.
 - [ ] Inventário.
-- [ ] Equipamentos e cálculo de CA.
+- [ ] Equipamentos e CA.
 - [ ] Condições.
 - [ ] Recursos de classe.
 - [ ] Evolução de nível.
 - [ ] Sub-raças/subclasses conforme escopo.
 
-**Estado atual:** criação de personagem e atributos funcionam, mas a ficha completa ainda não existe.
-
 ---
 
 ## P3, combate completo
 
-### Núcleo já implementado
+### Já existe no núcleo
 
 - [x] Iniciativa.
-- [x] Ordem de turnos.
-- [x] Movimento.
-- [x] Ação.
-- [x] Ação bônus.
-- [x] Reação.
+- [x] Turnos.
+- [x] Movimento em grade.
 - [x] Ataques.
 - [x] Dano.
 - [x] Crítico.
 - [x] Dash.
 - [x] Dodge.
 - [x] Disengage.
-- [x] Movimento em grade.
+- [x] Ação bônus/reação como estrutura inicial.
 
-### Ainda falta
+### Falta
 
-- [ ] Condições completas.
+- [ ] Condições.
 - [ ] Cobertura.
-- [ ] Alcance/distância completo.
-- [ ] Morte e death saves.
+- [ ] Alcance completo.
+- [ ] Death saves.
 - [ ] Monstros/inimigos estruturados.
 - [ ] Recursos de classe.
-- [ ] Ataques e ações específicas por classe.
+- [ ] Ações específicas por classe.
 - [ ] Loot/equipamentos.
-- [ ] Combate completo contra múltiplos inimigos sem fixtures do vertical slice.
-
-**Estado atual:** combate é um núcleo determinístico inicial, não ainda o combate completo de D&D 5e.
+- [ ] Combate completo com múltiplos inimigos.
 
 ---
 
-## P4, mundo e campanha persistentes
+## P4, campanha persistente
 
-### Já implementado
+### Já existe
 
-- [x] Estrutura inicial de AdventureState.
-- [x] Locais, NPCs, quests, encounters, itens, flags, segredos e progresso no estado.
-- [x] Persistência inicial de AdventureState na sessão.
-- [x] Atualização de progresso, locais, encounters e quests pelo GameEngine.
-- [x] SQLite para desenvolvimento.
-- [x] PostgreSQL/Supabase para produção.
+- [x] AdventureState.
+- [x] Locais, NPCs, quests, encounters, itens, flags e progresso no estado.
+- [x] Persistência inicial de AdventureState.
+- [x] SQLite.
+- [x] PostgreSQL/Supabase.
 
-### Ainda falta
+### Falta
 
 - [ ] Campaign como entidade independente.
 - [ ] Players vinculados a Campaign.
 - [ ] Characters persistentes como entidades próprias.
-- [ ] Persistência completa de NPCs.
-- [ ] Persistência completa de locais/mapas.
-- [ ] Persistência completa de itens/equipamentos.
+- [ ] NPCs persistentes.
+- [ ] Locais/mapas persistentes.
+- [ ] Itens persistentes.
 - [ ] Histórico transacional de eventos.
 - [ ] Consequências persistentes abrangentes.
-- [ ] Separar definitivamente campanha de chat.
-
-**Critério de pronto:** fechar o Telegram e continuar a mesma campanha dias depois sem depender do estado da conversa.
+- [ ] Separação definitiva entre campanha e chat.
 
 ---
 
-## P5, memória e Context Builder
+## P5, narrativa com estado real
+
+Este é o próximo grande salto de qualidade.
+
+Hoje a narrativa já evita placeholders e registra eventos no contexto, mas ainda existe dependência excessiva de texto livre.
+
+### Falta
+
+- [ ] Retorno estruturado de consequências.
+- [ ] IDs de entidades em descobertas e interações.
+- [ ] Movimento como consequência validada.
+- [ ] Descobertas como fatos estruturados.
+- [ ] Reações de NPCs por estado.
+- [ ] Eventos transacionais.
+- [ ] Separação entre narrativa e alteração de estado.
+
+**Meta:** a IA pode narrar uma consequência, mas somente uma consequência validada pode alterar o mundo.
+
+---
+
+## P6, memória e ContextBuilder
 
 - [ ] ContextBuilder.
 - [ ] MemoryStore.
-- [ ] Resumo automático de eventos.
+- [ ] Resumo automático.
 - [ ] Seleção de memória relevante.
-- [ ] Compactação do histórico.
 - [ ] Memória episódica.
 - [ ] Fatos persistentes.
 - [ ] Lore do mundo.
-- [ ] Proteção contra contradições entre memória e estado determinístico.
-
-**Nota:** AdventureState já separa parte importante do estado da janela de contexto, mas memória de longo prazo ainda não foi implementada.
+- [ ] Proteção contra contradições.
 
 ---
 
-## P6, arquitetura de IA e AI Manager
+## P7, AI Manager
 
-### Estado atual
-
-- [x] Providers existentes podem ser configurados/fallback conforme implementação atual.
-- [x] Validação básica de respostas estruturadas.
-- [x] Cooldown/fallback de provider.
-- [x] Provider local/OpenAI-compatible pode operar conforme configuração.
-- [x] Separação inicial entre narrativa e mecânicas.
-
-### Ainda falta
-
-- [ ] Provider interface consolidada.
-- [ ] AI Manager único.
+- [ ] Interface única de providers.
 - [ ] Structured outputs padronizados.
-- [ ] Retry controlado centralizado.
+- [ ] Retry centralizado.
 - [ ] ContextBuilder integrado.
 - [ ] Tool calling.
-- [ ] Consulta de estado via ferramentas.
-- [ ] Consulta de regras via ferramentas.
-- [ ] Separação completa do God class `narrator.py`.
-
-Regra final: a IA nunca grava diretamente no Campaign State.
+- [ ] Consulta de estado por ferramentas.
+- [ ] Consulta de regras por ferramentas.
+- [ ] Separar responsabilidades do `narrator.py`.
 
 ---
 
-## P7, geração dinâmica de aventuras
+## P8, geração dinâmica de aventuras
 
-### Já implementado
+### Já existe
 
-- [x] Schema inicial de AdventureState.
-- [x] Prompt de geração estruturada.
+- [x] Schema inicial.
 - [x] Mundo/região/cidade.
 - [x] Locais e conexões.
 - [x] NPCs.
 - [x] Encounters.
-- [x] Quests com etapas.
+- [x] Quests.
 - [x] Itens.
 - [x] Segredos.
-- [x] Progresso inicial.
 - [x] Validação estrutural.
-- [x] Validação semântica básica.
-- [x] Validação semântica avançada.
-- [x] Validação de existência de referências essenciais.
-- [x] Validação de alcançabilidade do alvo acionável atual.
+- [x] Validação semântica.
+- [x] Validação de referências.
+- [x] Validação de alcançabilidade inicial.
 
-### Ainda falta
+### Falta
 
-- [ ] Validação completa das conexões entre locais.
-- [ ] Validação completa de referências entre todas as entidades.
-- [ ] Validar caminho sequencial de todos os objetivos de uma quest.
-- [ ] Garantir objetivos importantes alcançáveis por múltiplos caminhos.
-- [ ] Gerar pistas redundantes para objetivos importantes.
-- [ ] Modelar pistas como entidades descobríveis.
-- [ ] Evitar aventura linear rígida em geração e execução.
-- [ ] Registrar dependências narrativas.
-- [ ] Validar que caminhos alternativos são realmente independentes.
+- [ ] Validar todas as conexões.
+- [ ] Validar todas as referências cruzadas.
+- [ ] Validar caminho sequencial das quests.
+- [ ] Múltiplos caminhos para objetivos importantes.
+- [ ] Pistas redundantes.
+- [ ] Pistas como entidades.
+- [ ] Evitar linearidade rígida.
+- [ ] Dependências narrativas explícitas.
+- [ ] Caminhos alternativos realmente independentes.
 
 ---
 
-## P8, Diretor de Cena
+## P9, Diretor de Cena
 
-### Já implementado
+### Já existe
 
-- [x] Nível 0: liberdade.
-- [x] Nível 1: oportunidade.
-- [x] Nível 2: sugestão.
-- [x] Nível 3: intervenção.
+- [x] Liberdade.
+- [x] Oportunidade.
+- [x] Sugestão.
+- [x] Intervenção.
 - [x] Detecção de estagnação.
-- [x] Sugestões relacionadas ao local atual.
-- [x] Propostas de ação.
-- [x] Decision → Vote → Resolution.
-- [x] Contagem de votos.
+- [x] Decisão/votação.
 - [x] Maioria absoluta.
-- [x] Empate não executa.
-- [x] Jogadores sem voto não são considerados voto válido.
-- [x] Participação individual após decisão.
-- [x] Testes individuais encaminhados com o personagem participante.
-- [x] Registro de decisão como evento.
-- [x] Recusa individual registrada.
-- [x] Consequência cômica planejada como recurso narrativo futuro, sem regra automática de morte.
+- [x] Empate sem execução.
+- [x] Participação individual.
+- [x] Registro de decisão/recusa.
 
-### Ainda falta
+### Falta
 
 - [ ] Botões de votação no Telegram.
 - [ ] Janela de votação real.
-- [ ] Narração específica dos resultados individuais.
-- [ ] Diretor baseado em pistas descobertas.
-- [ ] Pressão/urgência narrativa persistente.
-- [ ] Consequências narrativas posteriores baseadas em recusas.
+- [ ] Narração específica dos resultados.
+- [ ] Diretor baseado em pistas.
+- [ ] Pressão/urgência persistente.
+- [ ] Consequências posteriores de recusas.
 - [ ] Intervenções mais sofisticadas sem retirar agência.
-
-**Regra de ouro:** o Diretor não deve exigir uma solução específica.
 
 ---
 
-## P9, simulador de campanha
+## P10, simulador
 
-### Já implementado
+### Já existe
 
 - [x] CampaignSimulator.
 - [x] PlayerAgent.
-- [x] ScriptedPlayerAgent.
-- [x] GoalDrivenPlayerAgent.
-- [x] PersonalityPlayerAgent.
-- [x] Ações artificiais determinísticas.
-- [x] Ações orientadas por objetivo.
-- [x] Simulação de exploração.
-- [x] Simulação de testes.
-- [x] Simulação do combate inicial.
-- [x] Simulação de quests.
-- [x] Simulação de decisões.
-- [x] Participação/recusa individual.
-- [x] Intervenção do Diretor de Cena.
-- [x] Descoberta/visita de locais.
-- [x] Validação estrutural durante a simulação.
-- [x] Validação semântica durante a simulação.
+- [x] Agentes scripted, goal-driven e personality.
+- [x] Exploração.
+- [x] Testes.
+- [x] Combate inicial.
+- [x] Quests.
+- [x] Decisões.
+- [x] Participação/recusa.
+- [x] Diretor.
+- [x] Validação durante execução.
 - [x] Detecção de loops.
-- [x] Detecção de ausência de progresso.
-- [x] Relatório final.
+- [x] Relatório.
 
-### Ainda falta
+### Falta
 
-- [ ] Simulação de desvios imprevisíveis dos jogadores.
-- [ ] Persistência real durante a simulação.
-- [ ] Execução integrada ao ContextBuilder.
-- [ ] Execução integrada ao AI Manager.
+- [ ] Desvios imprevisíveis.
+- [ ] Persistência real.
+- [ ] Integração com ContextBuilder.
+- [ ] Integração com AI Manager.
 - [ ] Logs estruturados.
-- [ ] Métricas de provider/tokens/custo.
-- [ ] Métricas completas de NPCs e pistas.
+- [ ] Métricas de provider/custo.
+- [ ] Métricas de NPCs/pistas.
 - [ ] Critérios de falha completos.
-- [x] Resolver etapas de quest por alvos estruturados, sem hardcode dos IDs da aventura vertical.
-- [ ] Primeiro vertical slice completo: criação → cena → exploração → pista → teste → NPC → combate → loot → quest → novo local → consequência → desfecho.
-
-**Nota importante:** o simulador atual é uma ferramenta de engenharia determinística. Ele já prova partes relevantes do pipeline, mas ainda não é um simulador de campanha completo.
+- [ ] Vertical slice completo ponta a ponta.
 
 ---
 
-## P10, multimídia
+## P11, multimídia
 
 - [ ] Retratos de NPCs.
 - [ ] Imagens de locais.
@@ -306,17 +293,16 @@ Regra final: a IA nunca grava diretamente no Campaign State.
 - [ ] Voz.
 - [ ] Sons.
 - [ ] Handouts.
-- [ ] Gerenciamento de mídia da campanha.
+- [ ] Gerenciamento de mídia.
 
 ---
 
-## P11, produção
+## P12, produção
 
 - [ ] Logs estruturados.
 - [ ] Métricas.
 - [ ] Health check.
-- [ ] Backup.
-- [ ] Restore.
+- [ ] Backup/restore.
 - [ ] Rate limiting.
 - [ ] Controle de custos.
 - [ ] Alertas.
@@ -326,7 +312,7 @@ Regra final: a IA nunca grava diretamente no Campaign State.
 
 ---
 
-## P12, visão de produto
+## P13, produto
 
 - [ ] Múltiplas campanhas.
 - [ ] Mestre humano + IA.
@@ -336,41 +322,31 @@ Regra final: a IA nunca grava diretamente no Campaign State.
 - [ ] Mapa interativo.
 - [ ] Editor de campanha.
 - [ ] Biblioteca de NPCs.
-- [ ] Exportação para PDF.
-- [ ] Sistema de compartilhamento de campanhas.
+- [ ] Exportação PDF.
+- [ ] Compartilhamento de campanhas.
 
 ---
 
-# Ordem de execução atual
+# Ordem de execução de amanhã
 
-**Estabilidade → GameEngine → personagem → combate → campanha persistente → memória/ContextBuilder → AI Manager → geração dinâmica → Diretor de Cena → simulador → multimídia → produção → produto.**
+**1. Estabilidade → 2. consequências estruturadas → 3. persistência transacional → 4. personagem/combatente completo → 5. memória/ContextBuilder → 6. AI Manager → 7. geração dinâmica → 8. simulador → 9. produção/produto.**
 
-## Próximo bloco técnico recomendado
-
-Antes de adicionar mais funcionalidades narrativas, consolidar o núcleo atual:
-
-1. validar CI no GitHub;
-2. generalizar objetivos/quest steps;
-3. implementar múltiplos caminhos;
-4. modelar pistas redundantes;
-5. remover hardcodes do vertical slice;
-6. ampliar o simulador;
-7. só então avançar para memória/ContextBuilder e AI Manager.
+Não adicionar novas features grandes antes de fechar o P0.
 
 ## Critério de qualidade
 
-Nenhum recurso deve ser marcado como concluído apenas porque existe um protótipo.
+Só marcar um item como concluído quando:
 
-Um item só deve virar `[x]` quando:
-
-- possui implementação no repositório;
-- possui teste quando aplicável;
+- existe implementação;
+- existe teste quando aplicável;
 - não depende de comportamento manual escondido;
 - está documentado;
-- suas limitações conhecidas estão registradas.
+- limitações conhecidas estão registradas.
 
-## Marco atual
+## Marco técnico
 
-O projeto já saiu da fase de "bot narrador com regras misturadas à IA" e possui um **núcleo determinístico inicial de RPG + estado estruturado + Diretor + decisão multiplayer + simulador**.
+O projeto já deixou de ser apenas um "bot que chama uma IA para contar uma história". Agora existe um núcleo com:
 
-O próximo objetivo é transformar esse núcleo em um motor de campanha realmente robusto, capaz de sobreviver a jogadores imprevisíveis sem depender da memória de uma única chamada de IA.
+**intenção → regra → teste → estado → narrativa → persistência.**
+
+O trabalho seguinte é fazer esse núcleo resistir ao mundo real: concorrência, reinício, respostas atrasadas, jogadores imprevisíveis e consequências que realmente alteram o mundo.
