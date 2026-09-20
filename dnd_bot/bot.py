@@ -465,6 +465,13 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
 
         inimigo_resultados = run_enemy_turns(combate)
+        # O HP dos personagens é parte da ficha persistente, não apenas do snapshot
+        # temporário de combate.
+        for combatant in combate.combatants:
+            if combatant.is_player:
+                jogador = next((j for j in db.listar_jogadores(chat_id) if j["nome"] == combatant.name), None)
+                if jogador:
+                    db.atualizar_status_combate(jogador["user_id"], chat_id, combatant.hp)
         raw_combate = combate.to_dict()
         raw_combate["encounter_id"] = (aventura_atual.get("combate") or {}).get("encounter_id")
         aventura_atual = dict(aventura_atual)
