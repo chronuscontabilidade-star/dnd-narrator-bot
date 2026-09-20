@@ -119,6 +119,20 @@ class ActionResolver:
             if not any(local.get("id") == destino for local in self.adventure.get("locais", [])):
                 destino = None
 
+        if tipo == "narrativa":
+            # A classificação semântica pode chamar de "narrativa" uma ação que
+            # claramente muda a posição do personagem. O motor corrige isso aqui,
+            # porque deslocamento é mecânica de estado, não apenas prosa.
+            n = normalize(text)
+            termos_movimento = (
+                "descer", "subir", "atravessar", "cruzar", "aproximar",
+                "aproximar-se", "afastar", "recuar", "avancar", "avançar",
+                "seguir", "continuar", "entrar", "sair", "voltar", "retornar",
+                "caminhar", "andar", "ir para", "ir pra", "vou para", "vou pra",
+            )
+            if any(termo in n for termo in termos_movimento):
+                tipo = "movimento"
+
         if tipo == "movimento":
             # Referências como "seguir as pegadas", "continuar pela passagem" ou
             # "avançar pelo caminho" podem apontar para a próxima conexão do mapa
