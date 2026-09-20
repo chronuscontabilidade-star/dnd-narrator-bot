@@ -131,6 +131,11 @@ class CombatState:
     def __post_init__(self) -> None:
         if len(self.combatants) < 2:
             raise ValueError("Um combate precisa de pelo menos dois combatentes.")
+        names = [combatant.name.strip() for combatant in self.combatants]
+        if any(not name for name in names):
+            raise ValueError("Todo combatente precisa de nome.")
+        if len(set(names)) != len(names):
+            raise ValueError("Combatentes precisam ter nomes únicos.")
 
     @property
     def current(self) -> Combatant:
@@ -170,6 +175,8 @@ class CombatState:
             raise RuntimeError("Estado de turno não encontrado.") from exc
 
     def start(self, rng=None) -> list[InitiativeResult]:
+        if self.started:
+            raise RuntimeError("O combate já foi iniciado.")
         results = []
         for combatant in self.combatants:
             roll_result = roll_d20(rng=rng)
