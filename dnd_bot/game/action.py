@@ -94,6 +94,86 @@ class ActionResolver:
             motivo=motivo,
         )
 
+
+    def resolve_semantic(self, action: str, semantic: dict) -> ActionIntent:
+        """Converte uma intenção semântica validada pela IA em regra determinística.
+
+        A IA pode classificar a intenção e indicar referências linguísticas,
+        mas não escolhe CD, rolagem, dano ou consequências do jogo.
+        """
+        text = (action or "").strip()
+        tipo = str((semantic or {}).get("tipo") or "").strip().lower()
+        alvo = (semantic or {}).get("alvo")
+        destino = (semantic or {}).get("destino")
+
+        allowed = {
+            "movimento", "percepcao", "investigacao", "obstaculo",
+            "ferramentas", "furtividade", "furto", "social",
+            "ataque", "narrativa", "fim_turno",
+        }
+        if tipo not in allowed:
+            return ActionIntent("ambigua", text, motivo="Intenção semântica não reconhecida.")
+
+        if destino:
+            destino = str(destino)
+            if not any(local.get("id") == destino for local in self.adventure.get("locais", [])):
+                destino = None
+
+        if tipo == "movimento":
+            return ActionIntent(
+                tipo="movimento", descricao=text, alvo=str(alvo) if alvo else None,
+                destino=destino, requer_teste=False,
+                motivo="Intenção de movimento identificada semanticamente; o motor valida o destino.",
+            )
+        if tipo == "percepcao":
+            return ActionIntent("percepcao", text, alvo=str(alvo) if alvo else None,
+                                habilidade="Percepção", atributo="Sabedoria",
+                                requer_teste=True, cd=12,
+                                motivo="Ação de percepção identificada semanticamente.")
+        if tipo == "investigacao":
+            return ActionIntent("investigacao", text, alvo=str(alvo) if alvo else None,
+                                habilidade="Investigação", atributo="Inteligência",
+                                requer_teste=True, cd=12,
+                                motivo="Ação de investigação identificada semanticamente.")
+        if tipo == "obstaculo":
+            return ActionIntent("obstaculo", text, alvo=str(alvo) if alvo else None,
+                                habilidade="Atletismo", atributo="Força",
+                                requer_teste=True, cd=12,
+                                motivo="Superação física identificada semanticamente.")
+        if tipo == "ferramentas":
+            return ActionIntent("ferramentas", text, alvo=str(alvo) if alvo else "fechadura",
+                                habilidade=None, atributo=None,
+                                requer_teste=True, cd=12,
+                                motivo="Uso de ferramenta identificado semanticamente.")
+        if tipo == "furtividade":
+            return ActionIntent("furtividade", text, alvo=str(alvo) if alvo else None,
+                                habilidade="Furtividade", atributo="Destreza",
+                                requer_teste=True, cd=12,
+                                motivo="Furtividade identificada semanticamente.")
+        if tipo == "furto":
+            return ActionIntent("furto", text, alvo=str(alvo) if alvo else None,
+                                habilidade="Prestidigitação", atributo="Destreza",
+                                requer_teste=True, cd=12,
+                                motivo="Tentativa de furto identificada semanticamente.")
+        if tipo == "social":
+            habilidade = str((semantic or {}).get("habilidade") or "Persuasão")
+            if habilidade not in SKILLS or SKILLS[habilidade] != "Carisma":
+                habilidade = "Persuasão"
+            return ActionIntent("social", text, alvo=str(alvo) if alvo else None,
+                                habilidade=habilidade, atributo="Carisma",
+                                requer_teste=True, cd=12,
+                                motivo="Interação social identificada semanticamente.")
+        if tipo == "ataque":
+            return ActionIntent("ataque", text, alvo=str(alvo) if alvo else None,
+                                requer_teste=False,
+                                motivo="Ataque identificado semanticamente; o motor de combate resolve a mecânica.")
+        if tipo == "fim_turno":
+            return ActionIntent("fim_turno", text, requer_teste=False,
+                                motivo="Encerramento de turno identificado semanticamente.")
+        return ActionIntent("narrativa", text, alvo=str(alvo) if alvo else None,
+                            destino=destino, requer_teste=False,
+                            motivo="Ação narrativa identificada semanticamente.")
+
     def resolve(self, action: str) -> ActionIntent:
         text = (action or "").strip()
         n = normalize(text)
