@@ -49,6 +49,27 @@ class SemanticIntentTests(unittest.TestCase):
         self.assertFalse(intent.requer_teste)
         self.assertEqual(intent.destino, "corredor")
 
+    def test_local_semantic_fallback_understands_route_language(self):
+        narrator = Narrator("")
+        narrator._request_json = lambda _prompt: (_ for _ in ()).throw(RuntimeError("offline"))
+        session = {"aventura": self.adventure, "contexto": "No templo."}
+        character = {"nome": "Kira", "classe": "Ladina", "raca": "Elfa"}
+
+        for phrase in (
+            "pegar o caminho que segue para dentro",
+            "avançar pela rota descoberta",
+            "continuar pela passagem",
+            "vou seguindo as pegadas",
+        ):
+            with self.subTest(phrase=phrase):
+                semantic = asyncio.run(narrator.interpretar_acao(session, character, phrase))
+                self.assertIsNotNone(semantic)
+                self.assertEqual(semantic["tipo"], "movimento")
+                intent = ActionResolver(self.adventure).resolve_semantic(phrase, semantic)
+                self.assertEqual(intent.tipo, "movimento")
+                self.assertEqual(intent.destino, "corredor")
+                self.assertFalse(intent.requer_teste)
+
     def test_semantic_parser_cannot_invent_unknown_destination(self):
         narrator = Narrator("")
         narrator._request_json = lambda _prompt: asyncio.sleep(0, result={
