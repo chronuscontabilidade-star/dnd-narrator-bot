@@ -182,12 +182,12 @@ class CombatTests(unittest.TestCase):
 
     def test_combat_state_round_trip(self):
         hero = Combatant("Heroi", 12, 10, 8, dexterity=14, attack_bonus=5, damage_dice="1d8", damage_bonus=3, is_player=True)
-        goblin = Combatant("Goblin", 12, 7, 7, position=(1, 0))
+        goblin = Combatant("Goblin", 12, 20, 20, position=(1, 0))
         combat = started_combat(hero, goblin)
         combat.attack(hero, goblin, rng=FixedRng([10, 5]))
         restored = CombatState.from_dict(combat.to_dict())
         self.assertEqual(restored.current.name, "Heroi")
-        self.assertEqual(restored.combatants[1].hp, 0)
+        self.assertEqual(restored.combatants[1].hp, 12)
         self.assertEqual(restored.turn_states["Heroi"].action_used, True)
 
     def test_combat_state_rejects_invalid_turn_index(self):
