@@ -42,6 +42,7 @@ RACAS = {
     "Tiefling": {"vantagens": "Presença marcante e afinidade mágica.", "desvantagens": "Pode enfrentar preconceito no cenário."},
     "Meio-Orc": {"vantagens": "Força e resistência excepcionais.", "desvantagens": "Menos adequado a conceitos sutis."},
 }
+HIT_DICE_BY_CLASS = {"Guerreiro": 10, "Bárbaro": 12, "Ladino": 8, "Mago": 6, "Clérigo": 8, "Ranger": 10}
 CLASSES = {
     "Guerreiro": {"vantagens": "Versátil no combate e resistente.", "desvantagens": "Poucas ferramentas mágicas."},
     "Bárbaro": {"vantagens": "Alta resistência e dano físico.", "desvantagens": "Menos opções fora do combate."},
@@ -242,6 +243,11 @@ async def finalizar_personagem(update, ctx, estado):
 
         # Primeiro persistimos o personagem. A criação da ficha não depende
         # da existência de uma sessão antiga ou de uma aventura anterior.
+        nivel = 1
+        dado_vida = HIT_DICE_BY_CLASS.get(p["classe"], 8)
+        hp_max = max(1, dado_vida + modificador(atributos.get("Constituição", 10)))
+        ca = max(1, 10 + modificador(atributos.get("Destreza", 10)))
+
         db.salvar_personagem(
             update.effective_user.id,
             chat_id,
@@ -251,6 +257,10 @@ async def finalizar_personagem(update, ctx, estado):
             atributos,
             ficha["historia"],
             p.get("detalhes", ""),
+            nivel=nivel,
+            hp_max=hp_max,
+            hp=hp_max,
+            ca=ca,
         )
 
         # Uma sessão só conta como campanha existente se tiver AdventureState
@@ -276,6 +286,10 @@ async def finalizar_personagem(update, ctx, estado):
             "nome": p["nome"],
             "raca": p["raca"],
             "classe": p["classe"],
+            "nivel": nivel,
+            "hp_max": hp_max,
+            "hp": hp_max,
+            "ca": ca,
             "atributos": atributos,
             "detalhes": p.get("detalhes", ""),
             "historia": ficha["historia"],
