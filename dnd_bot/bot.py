@@ -598,16 +598,10 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 formatar_resultado_dado(teste, p["nome"]), parse_mode="MarkdownV2"
             )
 
-    await update.message.reply_text("📖 O narrador descreve o que acontece...")
-
-    jogadores = db.listar_jogadores(chat_id)
+    # O motor atualiza primeiro os fatos verificáveis da ação.
+    # O narrador só recebe o estado pós-ação, evitando narrar uma cena antiga.
     sessao_atual = db.obter_sessao(chat_id) or sessao
     sessao_atual["aventura"] = aventura_atual
-    historico = db.historico_recente(chat_id, limite=10)
-
-    resultado = await narrator.narrar_acao_com_dado(
-        sessao_atual, p, jogadores, acao, teste, historico
-    )
 
     # Atualiza somente fatos que o motor conseguiu validar.
     try:
@@ -690,6 +684,17 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except (ValueError, TypeError, KeyError) as exc:
         log.warning("Não foi possível atualizar AdventureState: %s", exc)
         aventura_nova = sessao_atual.get("aventura") or aventura_atual
+
+        aventura_nova = sessao_atual.get("aventura") or aventura_atual
+
+    # Só agora o narrador recebe a aventura resultante.
+    await update.message.reply_text("📖 O narrador descreve o que acontece...")
+    jogadores = db.listar_jogadores(chat_id)
+    sessao_atual["aventura"] = aventura_nova
+    historico = db.historico_recente(chat_id, limite=10)
+    resultado = await narrator.narrar_acao_com_dado(
+        sessao_atual, p, jogadores, acao, teste, historico
+    )
 
     novo_ctx = resultado.get("novo_contexto") or sessao_atual["contexto"]
     if novo_ctx.strip() == sessao_atual["contexto"].strip():
