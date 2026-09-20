@@ -413,6 +413,19 @@ async def cmd_acao(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         progresso = estado.data["progresso"]
         local_atual = progresso.get("local_atual")
 
+        resultado_evento = (
+            "sucesso" if teste and teste.get("sucesso")
+            else "falha" if teste else "sem teste"
+        )
+        estado = estado.update_progress(
+            event={
+                "tipo": "acao_jogador",
+                "jogador": p["nome"],
+                "acao": acao,
+                "resultado": resultado_evento,
+            },
+        )
+
         if intent.tipo == "movimento" and intent.destino:
             locais = estado.data.get("locais", [])
             destino = next((l for l in locais if l.get("id") == intent.destino), None)
