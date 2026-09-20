@@ -150,6 +150,15 @@ class CombatTests(unittest.TestCase):
         combat = CombatState([hero, goblin])
         self.assertTrue(combat.finished)
 
+    def test_finished_combat_rejects_new_actions(self):
+        hero = Combatant("Heroi", 10, 10, 0, is_player=True)
+        goblin = Combatant("Goblin", 10, 0, 0, position=(1, 0))
+        combat = CombatState([hero, goblin])
+        combat.start(FixedRng([10, 10]))
+        self.assertTrue(combat.finished)
+        with self.assertRaises((RuntimeError, ValueError)):
+            combat.attack(hero, goblin, rng=FixedRng([10]))
+
     def test_character_conversion(self):
         character = Character(
             name="Kira",
