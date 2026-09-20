@@ -64,6 +64,38 @@ class CampaignSimulatorTests(unittest.TestCase):
         self.assertGreaterEqual(len(result.report.director_levels), 1)
         self.assertEqual(result.report.loops_detected, 0)
 
+    def test_simulator_resolves_quest_by_structured_targets_not_fixture_ids(self):
+        state = build_vertical_slice_adventure().to_dict()
+        state["aventura"]["id"] = "outra-aventura"
+        state["quests"][0]["id"] = "quest_generica"
+        state["quests"][0]["etapas"][0]["id"] = "etapa_local"
+        state["quests"][0]["etapas"][0]["alvo"]["id"] = "beco"
+        state["quests"][0]["etapas"][1]["id"] = "etapa_cripta"
+        state["quests"][0]["etapas"][1]["alvo"]["id"] = "cripta"
+        state["quests"][0]["etapas"][2]["id"] = "etapa_encounter"
+        state["quests"][0]["etapas"][2]["alvo"]["id"] = "encontro_guardiao"
+
+        result = CampaignSimulator(rng=FixedRng()).run(
+            AdventureState.from_dict(state),
+            Character(
+                name="Teste",
+                race="Humano",
+                class_name="Guerreiro",
+                abilities={
+                    "Força": 16, "Destreza": 12, "Constituição": 14,
+                    "Inteligência": 14, "Sabedoria": 12, "Carisma": 10,
+                },
+                max_hp=20,
+                hp=20,
+                armor_class=15,
+            ),
+            agent=ScriptedPlayerAgent(),
+            max_steps=10,
+        )
+
+        self.assertTrue(result.report.passed, result.report.failures)
+        self.assertIn("quest_generica", result.state.data["progresso"]["quests_concluidas"])
+
     def test_goal_driven_agent_reads_campaign_state(self):
         state = build_vertical_slice_adventure()
         action = GoalDrivenPlayerAgent().choose_action(
