@@ -487,6 +487,13 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     "⚔️ Não há combate ativo nem encontro de combate pendente neste local."
                 )
                 return
+            # Se o inimigo venceu a iniciativa, o motor resolve os turnos
+            # inimigos até devolver o controle ao primeiro jogador.
+            if combate.started and not combate.finished and not combate.current.is_player:
+                run_enemy_turns(combate)
+            if combate.finished or not combate.current.is_player:
+                await update.message.reply_text("⚔️ O combate começou, mas nenhum jogador está apto a agir agora.")
+                return
 
         atacante = next((c for c in combate.combatants if c.name == p["nome"] and c.is_player), None)
         alvo_nome = intent.alvo
