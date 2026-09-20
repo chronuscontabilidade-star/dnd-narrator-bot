@@ -24,10 +24,18 @@ class Character:
     proficient_abilities: set[str] = field(default_factory=set)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("O personagem precisa de nome.")
         missing = set(ABILITIES) - set(self.abilities)
         if missing:
             raise ValueError(f"Atributos ausentes: {sorted(missing)}")
-        invalid = {name for name, value in self.abilities.items() if not isinstance(value, int)}
+        extra = set(self.abilities) - set(ABILITIES)
+        if extra:
+            raise ValueError(f"Atributos desconhecidos: {sorted(extra)}")
+        invalid = {
+            name for name, value in self.abilities.items()
+            if isinstance(value, bool) or not isinstance(value, int)
+        }
         if invalid:
             raise TypeError(f"Atributos precisam ser inteiros: {sorted(invalid)}")
         if self.level < 1 or self.level > 20:
@@ -38,6 +46,11 @@ class Character:
             raise ValueError("HP atual deve estar entre 0 e o HP máximo.")
         if self.armor_class < 1:
             raise ValueError("Classe de armadura deve ser positiva.")
+        invalid_proficiencies = set(self.proficient_abilities) - set(ABILITIES)
+        if invalid_proficiencies:
+            raise ValueError(
+                f"Proficiências de atributo desconhecidas: {sorted(invalid_proficiencies)}"
+            )
 
     @property
     def proficiency_bonus(self) -> int:
