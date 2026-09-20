@@ -102,6 +102,20 @@ class CharacterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Character("Kira", "Humano", "Guerreiro", abilities, max_hp=0, hp=0, armor_class=10)
 
+    def test_character_rejects_invalid_identity_and_attributes(self):
+        abilities = {ability: 10 for ability in (
+            "Força", "Destreza", "Constituição",
+            "Inteligência", "Sabedoria", "Carisma",
+        )}
+        with self.assertRaises(ValueError):
+            Character("", "Humano", "Guerreiro", abilities, max_hp=10, hp=10, armor_class=10)
+        with self.assertRaises(ValueError):
+            Character("Kira", "Humano", "Guerreiro", {**abilities, "Luck": 10}, max_hp=10, hp=10, armor_class=10)
+        with self.assertRaises(TypeError):
+            Character("Kira", "Humano", "Guerreiro", {**abilities, "Força": True}, max_hp=10, hp=10, armor_class=10)
+        with self.assertRaises(ValueError):
+            Character("Kira", "Humano", "Guerreiro", abilities, proficient_abilities={"Luck"}, max_hp=10, hp=10, armor_class=10)
+
     def test_character_has_core_state(self):
         character = Character(
             name="Kira",
