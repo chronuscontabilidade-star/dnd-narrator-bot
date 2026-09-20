@@ -208,7 +208,16 @@ class Narrator:
         last_error = None
         for name, worker in providers:
             try:
-                return await asyncio.to_thread(worker)
+                return await asyncio.wait_for(
+                    asyncio.to_thread(worker),
+                    timeout=self._request_timeout,
+                )
+            except asyncio.TimeoutError as exc:
+                last_error = RuntimeError(
+                    f"Timeout no provider {name} após {self._request_timeout:.0f}s"
+                )
+                self._cooldown_provider(name, last_error)
+                log.warning("%s", last_error)
             except Exception as exc:
                 last_error = exc
                 self._cooldown_provider(name, exc)
@@ -236,6 +245,7 @@ class Narrator:
                 None,
             )
             local_nome = local.get("nome", "local desconhecido") if local else "local desconhecido"
+            payload["titulo"] = payload["aventura"]["titulo"]
             payload["narrativa"] = narrativa
             payload["contexto"] = (
                 f"Aventura: {payload['aventura']['titulo']}. "
