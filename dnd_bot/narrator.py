@@ -567,7 +567,7 @@ class Narrator:
 
         novo_contexto = (
             f"{contexto}\n"
-            f"Progressão: etapa {etapa + 1}. Evento: {evento} Resultado mecânico: {resultado_txt}."
+            f"Progressão: etapa {etapa + 1}. Evento: {evento} Resultado: {resultado_txt}."
         ).strip()
         return {"narrativa": narr, "novo_contexto": novo_contexto, "sugestoes": sugestoes}
 
