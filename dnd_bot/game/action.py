@@ -142,6 +142,9 @@ class ActionResolver:
                 termos_rota = (
                     "rota", "caminho", "passagem", "pegada", "trilha",
                     "corredor", "estrada", "seguir", "avancar", "avançar",
+                    "descer", "subir", "atravessar", "cruzar", "aproximar",
+                    "afastar", "recuar", "retornar", "entrar", "sair",
+                    "caminhar", "andar", "ir para", "ir pra", "vou para", "vou pra",
                 )
                 if any(termo in referencia or termo in normalize(text) for termo in termos_rota):
                     atual_id = (self.adventure.get("progresso") or {}).get("local_atual")
