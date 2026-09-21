@@ -450,6 +450,11 @@ class Narrator:
             "o narrador descreve o que acontece",
             "algo acontece",
             "a aventura continua",
+            "age em ",
+            "e a situação muda",
+            "a situação muda sem apagar",
+            "a atenção agora se concentra",
+            "a atenção se concentra",
         )
         texto_norm = Narrator._normalizar_acao(narrativa)
         if any(Narrator._normalizar_acao(p) in texto_norm for p in proibidos):
@@ -514,32 +519,28 @@ class Narrator:
             "continuar", "caminhar", "andar", "ir para", "ir pra",
             "vou para", "vou pra",
         )):
-            proximos = [
-                item for item in locais
-                if item.get("id") in (local or {}).get("conexoes", [])
-                and not item.get("descoberto")
-            ]
-            destino = proximos[0] if proximos else None
-            if destino:
-                destino_nome = destino.get("nome", "a próxima área")
+            movimento = teste if isinstance(teste, dict) and teste.get("tipo") == "movimento" else None
+            if movimento and movimento.get("destino_nome"):
+                destino_nome = movimento["destino_nome"]
+                origem_nome = local_nome
                 narr = (
-                    f"{nome} avança pela rota descoberta e deixa {local_nome} para trás. "
-                    f"O caminho conduz diretamente a {destino_nome}, onde o ambiente muda "
-                    "e novos sinais mostram que a exploração está entrando em território ainda não examinado."
+                    f"{nome} chega a {destino_nome} após seguir a rota indicada. "
+                    f"{destino_nome} apresenta um ambiente diferente de {origem_nome}, "
+                    "e a exploração pode prosseguir a partir dos sinais encontrados aqui."
                 )
-                evento = f"{nome} avançou de {local_nome} para {destino_nome} pela rota descoberta."
+                evento = f"{nome} chegou a {destino_nome} vindo de {movimento.get('origem')}."
                 sugestoes = [
                     "Examinar o novo local",
                     "Observar os arredores antes de continuar",
-                    "Seguir por outra passagem disponível",
+                    "Explorar uma passagem disponível",
                 ]
             else:
                 narr = (
-                    f"{nome} avança pela rota que já conhece, mas não encontra uma nova saída imediata "
-                    f"além de {local_nome}. O caminho termina por enquanto, e os sinais do local sugerem "
-                    "que será preciso investigar o ambiente para descobrir a próxima passagem."
+                    f"{nome} tenta avançar a partir de {local_nome}, mas não encontra uma nova conexão direta. "
+                    "A rota conhecida termina por enquanto, e será preciso investigar o ambiente para descobrir "
+                    "como a exploração pode continuar."
                 )
-                evento = f"{nome} tentou avançar pela rota descoberta, mas não havia nova conexão direta a explorar."
+                evento = f"{nome} tentou avançar pela rota, mas não havia nova conexão direta a explorar."
                 sugestoes = [
                     "Examinar o local em busca de uma passagem",
                     "Observar sinais escondidos",
