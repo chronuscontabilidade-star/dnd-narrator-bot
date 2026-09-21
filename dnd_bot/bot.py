@@ -651,6 +651,7 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 destino = proximo
 
             if destino and movimento_permitido(estado.to_dict(), destino["id"]):
+                origem_id = progresso_atual.get("local_atual")
                 estado = estado.update_progress(
                     current_location=destino["id"],
                     discovered_location=destino["id"],
@@ -660,6 +661,13 @@ async def _cmd_acao_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         "descricao": f"{p['nome']} foi para {destino.get('nome')}.",
                     },
                 )
+                teste = {
+                    "tipo": "movimento",
+                    "sucesso": True,
+                    "origem": origem_id,
+                    "destino": destino.get("id"),
+                    "destino_nome": destino.get("nome"),
+                }
 
         elif intent.tipo in {"investigacao", "percepcao"} and (
             not teste or teste.get("sucesso")
